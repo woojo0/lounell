@@ -95,6 +95,7 @@ function PostToTrpg({ room, msgs, chars, sub, time }: {
         writer: '',
         withText: speakers.map(c => c.name).join(' · '),
         relId: room.relId,                  // 자관 기반 방이면 자관 페이지의 로그 목록에도 뜬다
+        auId: room.relId && room.auId && room.auId !== 'base' ? room.auId : undefined,   // AU 방이면 그 AU 목록에 (커플홈)
         date: rpLogLastDate(msgs),
         ph: 'cool',
         visibility: vis,

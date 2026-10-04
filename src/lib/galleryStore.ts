@@ -64,6 +64,8 @@ export interface TrpgLog {
   writer: string;            // 라이터 (필수)
   withText: string;          // 같이 간 사람 표기 (필수)
   relId?: string;            // 자관 연동 (필터)
+  /** 그 자관의 AU (커플홈 사용자 요청) — 없으면 원본. 자관 페이지의 로그 목록과 RP LOG 필터가 AU별로 나뉜다 */
+  auId?: string;
   date?: string;             // 선택
   ph: string;
   thumbUrl?: string;

@@ -311,7 +311,10 @@ export default function RpPage() {
     if (!rel) return '자유 개설';
     const names = relCharNames(r.relId);
     const isPair = rel.kind === 'pair' || rel.members.length === 2;
-    return isPair && names.length ? names.join(' · ') : rel.name;
+    const base = isPair && names.length ? names.join(' · ') : rel.name;
+    // AU 방이면 AU 이름까지 (커플홈 사용자 요청 — 원본 방과 구분)
+    const au = r.auId && r.auId !== 'base' ? rel.aus.find(a => a.id === r.auId) : undefined;
+    return au ? `${base} · ${au.label || 'AU'}` : base;
   };
   const roomSub = (r: RpRoom) => [
     roomLabel(r),

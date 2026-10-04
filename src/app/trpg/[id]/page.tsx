@@ -102,7 +102,7 @@ export default function TrpgDetailPage() {
   const [eOpen, setEOpen] = useState(false);
   const [e, setE] = useState({
     noText: '', title: '', catchphrase: '', writer: '', withText: '',
-    relId: 'none', date: '', visibility: 'public' as TrpgLog['visibility'], password: '',
+    relId: 'none', auId: 'base', date: '', visibility: 'public' as TrpgLog['visibility'], password: '',
     listHidden: false,   // 목록 표시 여부 (v2.0 — 접근권한과 별개)
   });
   // 본문 교체
@@ -153,6 +153,7 @@ export default function TrpgDetailPage() {
       title: e.title.trim(), catchphrase: e.catchphrase.trim() || undefined,
       writer: e.writer.trim(), withText: e.withText.trim(),
       relId: e.relId === 'none' ? undefined : e.relId,
+      auId: e.relId !== 'none' && e.auId !== 'base' ? e.auId : undefined,   // 그 자관의 AU (커플홈)
       date: e.date || undefined,
       visibility: e.visibility, password: e.password.trim() || undefined,
       listHidden: e.listHidden,
@@ -324,11 +325,16 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
         <PageTitle href={tt.href}>{tt.title}</PageTitle>
         <p>{logNo(l)}{[l.writer, l.withText].filter(Boolean).map(x => ` · ${x}`).join('')}{l.date ? ` · ${l.date.replace(/-/g, '.')}` : ''}</p>
         <div className="head-actions">
-          {rel && <button className="btn btn-dark" onClick={() => router.push(`/rels/${rel.id}`)}>{rel.name} ›</button>}
+          {/* AU 로그면 AU 이름까지, 누르면 그 AU 페이지로 (커플홈) */}
+          {rel && (() => {
+            const au = l.auId ? rel.aus.find(a => a.id === l.auId && a.id !== 'base') : undefined;
+            const href = au ? `/rels/${rel.id}?au=${encodeURIComponent(au.slug?.trim() || au.id)}` : `/rels/${rel.id}`;
+            return <button className="btn btn-dark" onClick={() => router.push(href)}>{au ? `${rel.name} · ${au.label || 'AU'}` : rel.name} ›</button>;
+          })()}
           {isAdmin && <button className="btn btn-dark" onClick={() => {
             setE({
               noText: l.noText ?? '', title: l.title, catchphrase: l.catchphrase ?? '', writer: l.writer,
-              withText: l.withText, relId: l.relId ?? 'none', date: l.date ?? '',
+              withText: l.withText, relId: l.relId ?? 'none', auId: l.auId ?? 'base', date: l.date ?? '',
               visibility: l.visibility, password: l.password ?? '', listHidden: !!l.listHidden,
             });
             // 본문·썸네일 교체 상태 초기화 (기본: 현재 것 유지)
@@ -429,8 +435,16 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
             <KInput placeholder="같이 간 사람 (선택)" value={e.withText} onChange={ev => setE(s => ({ ...s, withText: ev.target.value }))} />
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <KSelect minWidth={140} value={e.relId} onChange={v => setE(s => ({ ...s, relId: v }))}
+            <KSelect minWidth={140} value={e.relId} onChange={v => setE(s => ({ ...s, relId: v, auId: 'base' }))}
               options={[{ value: 'none', label: '자관 연동 없음' }, ...rels.map(r => ({ value: r.id, label: r.name }))]} />
+            {/* 그 자관의 AU (커플홈) — AU가 있는 자관에서만 */}
+            {(() => {
+              const aus = rels.find(r => r.id === e.relId)?.aus.filter(a => a.id !== 'base') ?? [];
+              return aus.length ? (
+                <KSelect minWidth={120} value={e.auId} onChange={v => setE(s => ({ ...s, auId: v }))}
+                  options={[{ value: 'base', label: '원본 설정' }, ...aus.map(a => ({ value: a.id, label: a.label || 'AU' }))]} />
+              ) : null;
+            })()}
             <KDate value={e.date} onChange={v => setE(s => ({ ...s, date: v }))} style={{ flex: 1 }} />
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

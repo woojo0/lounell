@@ -1,7 +1,7 @@
 'use client';
 // RP LOG (옛 TRPG 로그 백업, 4.3 — 커플홈에서 이름 변경) — 티켓형/기본형 스킨 · 우측 자관 뱃지 필터 · ＋ ADD LOG
 // 본문 입력 3방식: 파일 업로드(.txt/.html 내용 자동 판별) / HTML 붙여넣기 / 직접 작성
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Fragment, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useSectionParam, filterSection, sectionSetter, secStamp } from '@/lib/sectionStore';
@@ -61,6 +61,13 @@ function TrpgPageInner() {
   const [nWriter, setNWriter] = useState('');
   const [nWith, setNWith] = useState('');
   const [nRel, setNRel] = useState('none');
+  const [nAu, setNAu] = useState('base');   // 고른 자관의 AU (커플홈) — 자관 페이지에서 AU별로 나뉜다
+  // 자관 페이지의 「로그 더보기」로 들어오면 그 자관(·AU)으로 걸러 둔다 (?rel=&au=)
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const r = q.get('rel');
+    if (r) setFilter(q.get('au') ? `${r}:${q.get('au')}` : r);
+  }, []);
   const [nDate, setNDate] = useState('');
   const [nMode, setNMode] = useState<'file' | 'paste'>('paste');
   const [nBody, setNBody] = useState('');
@@ -79,7 +86,8 @@ function TrpgPageInner() {
 
   const counts = useMemo(() => {
     const m: Record<string, number> = {};
-    logs.forEach(l => { const k = l.relId ?? 'none'; m[k] = (m[k] ?? 0) + 1; });
+    // 자관 원본은 자관 id, AU 로그는 「자관 id:AU id」로 따로 센다 (커플홈)
+    logs.forEach(l => { const k = l.relId ? (l.auId ? `${l.relId}:${l.auId}` : l.relId) : 'none'; m[k] = (m[k] ?? 0) + 1; });
     return m;
   }, [logs]);
 
@@ -91,7 +99,8 @@ function TrpgPageInner() {
     // 목록 숨김 — 관리자도 편집모드가 아니면 안 보인다(목록을 정리해 두는 용도라, v2.0 사용자 요청).
     // 편집모드에서는 관리자에게만 예외로 보여 되돌릴 수 있게 한다
     .filter(l => !l.listHidden || (isAdmin && editOn))
-    .filter(l => filter === 'all' || (filter === 'none' ? !l.relId : l.relId === filter))
+    .filter(l => filter === 'all' || (filter === 'none' ? !l.relId
+      : filter.includes(':') ? `${l.relId}:${l.auId}` === filter : (l.relId === filter && !l.auId)))
     .filter(l => !q || l.title.includes(q) || l.writer.includes(q) || l.withText.includes(q));
   // 정렬 기준은 저장된 순서 — 편집모드에서 드래그로 바꾼 순서가 그대로 목록에 반영된다 (v2.0).
   // 새 로그는 앞에 넣으므로 기본은 지금까지처럼 최신순이고, № 번호는 표시용으로만 남는다.
@@ -195,6 +204,7 @@ function TrpgPageInner() {
       title: nTitle.trim(), catchphrase: nCatch.trim() || undefined,
       writer: nWriter.trim(), withText: nWith.trim(),
       relId: nRel === 'none' ? undefined : nRel,
+      auId: nRel !== 'none' && nAu !== 'base' ? nAu : undefined,   // 그 자관의 AU (커플홈)
       date: nDate || undefined, ph: 'cool',
       visibility: nVis,
       password: nPw.trim() || undefined,
@@ -336,10 +346,20 @@ function TrpgPageInner() {
           <div className={`tag ${filter === 'all' ? 'on' : ''}`} onClick={() => setFilter('all')}>
             전체 <small>{logs.length}</small>
           </div>
-          {rels.filter(r => counts[r.id]).map(r => (
-            <div key={r.id} className={`tag ${filter === r.id ? 'on' : ''}`} onClick={() => setFilter(r.id)}>
-              {r.name} <small>{counts[r.id]}</small>
-            </div>
+          {/* 자관마다 원본 / AU를 따로 (커플홈 사용자 요청 — AU 역극의 로그가 원본 목록에 섞였다) */}
+          {rels.filter(r => counts[r.id] || r.aus.some(a => counts[`${r.id}:${a.id}`])).map(r => (
+            <Fragment key={r.id}>
+              {counts[r.id] > 0 && (
+                <div className={`tag ${filter === r.id ? 'on' : ''}`} onClick={() => setFilter(r.id)}>
+                  {r.name} <small>{counts[r.id]}</small>
+                </div>
+              )}
+              {r.aus.filter(a => a.id !== 'base' && counts[`${r.id}:${a.id}`]).map(a => (
+                <div key={a.id} className={`tag ${filter === `${r.id}:${a.id}` ? 'on' : ''}`} onClick={() => setFilter(`${r.id}:${a.id}`)}>
+                  {r.name} · {a.label || 'AU'} <small>{counts[`${r.id}:${a.id}`]}</small>
+                </div>
+              ))}
+            </Fragment>
           ))}
           {counts['none'] > 0 && (
             <div className={`tag ${filter === 'none' ? 'on' : ''}`} onClick={() => setFilter('none')}>
@@ -378,8 +398,16 @@ function TrpgPageInner() {
             <KInput placeholder="같이 간 사람 (선택)" value={nWith} onChange={e => setNWith(e.target.value)} />
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <KSelect minWidth={140} value={nRel} onChange={setNRel}
+            <KSelect minWidth={140} value={nRel} onChange={v => { setNRel(v); setNAu('base'); }}
               options={[{ value: 'none', label: '자관 연동 없음' }, ...rels.map(r => ({ value: r.id, label: r.name }))]} />
+            {/* 그 자관의 AU (커플홈) — AU가 있는 자관에서만 */}
+            {(() => {
+              const aus = rels.find(r => r.id === nRel)?.aus.filter(a => a.id !== 'base') ?? [];
+              return aus.length ? (
+                <KSelect minWidth={120} value={nAu} onChange={setNAu}
+                  options={[{ value: 'base', label: '원본 설정' }, ...aus.map(a => ({ value: a.id, label: a.label || 'AU' }))]} />
+              ) : null;
+            })()}
             <KDate value={nDate} onChange={setNDate} style={{ flex: 1 }} />
           </div>
           {/* 접근권한 + 열람 비밀번호 (선택) — 권한이 없어도 비밀번호를 아는 사람은 열람 가능.

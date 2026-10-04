@@ -526,13 +526,19 @@ export default function RelDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [rel, auId, qaQuery],
   );
-  const relLogs = useMemo(() => logs.filter(l => l.relId === rel?.id), [logs, rel]);
+  /* 역극·로그는 보고 있는 AU의 것만 (커플홈 사용자 요청 — AU로 만든 역극이 원본 페이지에도 떴다).
+     원본 페이지에는 AU 지정이 없는 것만, AU 페이지에는 그 AU 것만. 지워진 AU를 가리키는 것은 원본으로 */
+  const auKeyOf = (id?: string) => (id && id !== 'base' && rel?.aus.some(a => a.id === id) ? id : 'base');
+  const relLogs = useMemo(() => logs.filter(l => l.relId === rel?.id && auKeyOf(l.auId) === auId),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [logs, rel, auId]);
   // 역극 연동 (4.9) — 내가 참여한 방 + 공개 전환된 완결 방만 (비참여 방은 존재 자체 비노출).
   // 참여자는 역극 페이지와 같은 계산(rpMemberIds)으로 — 자관 기반 방은 저장된 memberIds에 개설자만 있어서
   // 상대 오너에게는 자기가 참여한 역극이 이 목록에 뜨지 않았다 (커플홈 작업 중 발견)
-  const relRooms = useMemo(() => rooms.filter(rm => rm.relId === rel?.id
+  const relRooms = useMemo(() => rooms.filter(rm => rm.relId === rel?.id && auKeyOf(rm.auId) === auId
     && ((user && rpMemberIds(rm, rels, chars).includes(user.id)) || (rm.status === 'done' && rm.isPublic))),
-    [rooms, rel, user, rels, chars]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rooms, rel, user, rels, chars, auId]);
 
   if (!loaded) return <section className="page" />;
   if (!rel || (rel.visibility === 'private' && !isAdmin) || (rel.visibility === 'member' && !user)) {
@@ -1355,20 +1361,20 @@ export default function RelDetailPage() {
               </b>
             </div>
           )) : (
-            <p className="hint" style={{ margin: 0 }}>이 자관 기반으로 진행된 역극이 여기에 표시됩니다</p>
+            <p className="hint" style={{ margin: 0 }}>{auId === 'base' ? '이 자관 기반으로 진행된 역극이 여기에 표시됩니다' : '이 AU로 개설한 역극이 여기에 표시됩니다'}</p>
           )}
         </div>
         )}
         {!au?.hideLog && (
         <div className="panel widget" style={{ margin: 0, ...(au?.hideRp ? { gridColumn: '1/-1' } : null) }}>
-          <h4>로그 <span className="more" onClick={() => router.push('/trpg')}>더보기 ›</span></h4>
+          <h4>로그 <span className="more" onClick={() => router.push(`/trpg?rel=${rel.id}${auId !== 'base' ? `&au=${auId}` : ''}`)}>더보기 ›</span></h4>
           {relLogs.length > 0 ? relLogs.map(l => (
             <div key={l.id} className="dday-row" style={{ cursor: 'var(--cur-pointer,pointer)' }} onClick={() => router.push(`/trpg/${l.id}`)}>
               {/* 번호 없이 제목만 — 연동 리스트에서는 순번이 의미가 없다 (사용자 확정) */}
               <span>{l.title}</span>
               <b style={{ fontSize: 11, color: 'var(--faint)' }}>{l.date?.replace(/-/g, '.') ?? ''}</b>
             </div>
-          )) : <p className="hint" style={{ margin: 0 }}>연동된 로그가 없습니다 — 로그 등록 시 자관을 선택하면 여기에 표시</p>}
+          )) : <p className="hint" style={{ margin: 0 }}>{auId === 'base' ? '연동된 로그가 없습니다 — 로그 등록 시 자관을 선택하면 여기에 표시' : '이 AU로 연동된 로그가 없습니다 — 로그 등록·수정에서 자관과 AU를 고르면 여기에 표시'}</p>}
         </div>
         )}
       </div>

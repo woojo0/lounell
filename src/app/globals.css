@@ -222,6 +222,10 @@ a{color:inherit;text-decoration:none}
 .bgm.bgm-dock .bgm-list,.bgm.bgm-dock.bgm-left .bgm-list{right:12px;left:auto}
 .bgm-list.on{display:block;animation:fade .18s}
 .bgm-list .h{font-size:calc(9px*var(--fs,1));letter-spacing:.22em;color:var(--bgm-ic);padding:4px 9px 7px}
+/* 곡 목록은 8개까지만 보이고 넘치면 스크롤 (커플홈 사용자 요청) — 한 줄 높이(제목+설명)의 8배 */
+.bgm-list .its{max-height:calc(8 * var(--bgm-it-h,47px));overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.25) transparent;margin-right:-4px;padding-right:4px}
+.bgm-list .its::-webkit-scrollbar{width:5px}
+.bgm-list .its::-webkit-scrollbar-thumb{background:rgba(255,255,255,.25);border-radius:4px}
 .bgm-list .it{padding:7px 9px;border-radius:9px;cursor:var(--cur-pointer,pointer);transition:.13s}
 .bgm-list .it b{display:block;font-size:calc(11.5px*var(--fs,1));color:var(--bgm-fg)}
 .bgm-list .it small{font-size:calc(9.5px*var(--fs,1));color:var(--bgm-ic)}

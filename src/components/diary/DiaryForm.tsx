@@ -193,19 +193,10 @@ export function DiaryForm({ initial, moods, cats, charChoices, initialCharId, in
           <KInput placeholder="제목" value={title} onChange={e => setTitle(e.target.value)} style={{ flex: 1 }} />
           <KDate value={date} onChange={setDate} style={{ maxWidth: 130 }} />
         </div>
-        {/* 누구의 일기 · 구분 (커플홈) — 캐릭터를 고르면 그 이름으로, 자관의 그 캐릭터 칸에 보인다 */}
-        {(charChoices.length > 0 && !lockChar) || cats.length > 0 ? (
+        {/* 구분 (커플홈) — 「누구의 일기」 선택은 없앴다 (사용자 요청: 구분 탭을 만들 때 자관·AU를 다 정하고,
+            칸의 WRITE로 들어오면 그 캐릭터로 정해지므로 고를 일이 없다). charId는 들어온 칸(initialCharId) 그대로 */}
+        {cats.length > 0 ? (
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
-            {charChoices.length > 0 && !lockChar && (
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span className="cp-lb">누구의 일기</span>
-                <KSelect minWidth={140} maxWidth={200} value={charId} onChange={setCharId}
-                  options={charChoices.map(c => ({
-                    value: c.id,
-                    label: <span className="dot-lbl"><i className="cmt-dot" style={{ background: c.color }} />{c.name}</span>,
-                  }))} />
-              </div>
-            )}
             {cats.length > 0 && (
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 <span className="cp-lb">구분</span>

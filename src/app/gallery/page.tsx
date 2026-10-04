@@ -68,9 +68,8 @@ function BackupPageInner() {
   // 편집모드 카드 드래그 정렬 (v1.9 — 갤러리 보기)
   const sort = useCardSort(visible, next => setPosts(mergeOrder(posts, next)), editOn && isAdmin);
 
-  /* 게시물이 쌓이면 페이지로 (v2.0 사용자 요청) — 보기에 따라 한 장 분량이 다르다.
-     갤러리 보기는 한 줄에 3개라 6개(2줄, 커플홈 사용자 확정), 리스트 보기는 글 목록과 같은 20개. */
-  const PER = view === 'gal' ? 6 : 20;
+  /* 게시물이 쌓이면 페이지로 (v2.0 사용자 요청) — 갤러리·리스트 보기 모두 한 장에 6개 (커플홈 사용자 확정) */
+  const PER = 6;
   const [page, setPage] = useState(1);
   const pages = Math.max(1, Math.ceil(visible.length / PER));
   const cur = Math.min(page, pages);      // 검색·보기 전환으로 줄면 마지막 장으로 당긴다

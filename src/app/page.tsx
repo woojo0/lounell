@@ -9,9 +9,9 @@ import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { KRadio } from '@/components/ui/Kit';
 import { useToast } from '@/components/ui/Toast';
 
-const ADDABLE: WidgetType[] = ['banner', 'memo', 'dday', 'todo', 'upcoming', 'freetext', 'deco', 'diary', 'latest'];   // banner: 여러 개 추가 (v2.0 사용자 요청)
+const ADDABLE: WidgetType[] = ['banner', 'memo', 'dday', 'ddaytext', 'todo', 'upcoming', 'freetext', 'deco', 'diary', 'latest'];   // banner: 여러 개 추가 (v2.0 사용자 요청)
 /** 내용 설정 모달이 있는 위젯 — 우클릭 「설정」 노출 대상 (v1.9) */
-const EDITABLE: WidgetType[] = ['banner', 'memo', 'dday', 'todo', 'freetext', 'deco'];
+const EDITABLE: WidgetType[] = ['banner', 'memo', 'dday', 'ddaytext', 'todo', 'freetext', 'deco'];
 
 export default function MainPage() {
   const { state, editOn, gridOn, updateWidget, addWidget, removeWidget } = useMainStore();

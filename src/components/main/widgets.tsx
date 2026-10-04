@@ -12,7 +12,7 @@ import { Modal } from '@/components/ui/Modal';
 import { KTextarea, KSelect, KStep, KCheck } from '@/components/ui/Kit';
 import { ColorField } from '@/components/ui/ColorField';
 import { useFonts } from '@/lib/fontStore';
-import { BannerEditor, BannerSlide, DEMO_SLIDES, DdayEditor, DdayTextSettings, DecoEditor, TodoEditor, TodoSetItem } from '@/components/main/widgetEditors';
+import { BannerEditor, BannerSlide, DEMO_SLIDES, DdayEditor, DdayTextEditor, DdayTextSettings, DecoEditor, TodoEditor, TodoSetItem } from '@/components/main/widgetEditors';
 import { CroppedBlobImg, CropValue } from '@/components/ui/CropEditor';
 import { useLocalList } from '@/lib/postStore';
 import { RoadItem, ROAD_SEED, BackupPost, BACKUP_SEED } from '@/lib/galleryStore';
@@ -265,7 +265,6 @@ function ddayText(it: DdayItem, format: 'fixed' | 'free', numStyle: 'dplus' | 'd
 
 export function DdayWidget({ conf }: { conf: WidgetConf }) {
   const { isAdmin } = useAuth();
-  const { editOn } = useMainStore();
   const { familyOf } = useFonts();
   const [open, setOpen] = useState(false);
   const items = (conf.settings.items as DdayItem[]) ?? [];
@@ -273,44 +272,12 @@ export function DdayWidget({ conf }: { conf: WidgetConf }) {
   // 'serif'는 폰트 라이브러리의 실제(잠금) 폰트라 편집기의 기본 옵션과 값이 늘 일치한다
   const dFontId = (conf.settings.fontId as string | undefined) ?? 'serif';
   const dColor = conf.settings.color as string | undefined;
-  useEditEvent(conf.id, () => setOpen(true));   // 편집모드 우클릭 → 설정 (v1.9)
-  const s = conf.settings as DdayTextSettings;
-  /* 텍스트형 (커플홈 사용자 요청) — 패널·리스트 줄 없이 글씨만: 제목(폰트1) + 날짜 글씨(폰트2).
-     고정 형식은 D+123 / 123일, 자유 형식은 적어 둔 문장(「사랑한지 [[Dday]]일 째」)의 [[Dday]] 자리에 날 수 */
-  if (s.mode === 'text') {
-    const align = s.align ?? 'center';
-    return (
-      <div className="dday-text" style={{ textAlign: align, cursor: isAdmin ? 'pointer' : undefined }}
-        onClick={e => { if ((e.target as HTMLElement).closest('.modal-ov')) return; if (isAdmin && !editOn) setOpen(true); }}>
-        {items.map((it, i) => (
-          <div className="dday-tx" key={it.id ?? `${it.date}|${i}`}>
-            {it.title && (
-              <div className="t" style={{
-                fontFamily: s.titleFontId ? familyOf(s.titleFontId) : undefined,
-                fontSize: s.titleSize ? `calc(${s.titleSize}px*var(--fs,1))` : undefined,
-                color: s.titleColor,
-              }}>{it.title}</div>
-            )}
-            <div className="n" style={{
-              fontFamily: familyOf(dFontId),
-              fontSize: s.textSize ? `calc(${s.textSize}px*var(--fs,1))` : undefined,
-              color: dColor,
-            }}>{ddayText(it, s.format ?? 'fixed', s.numStyle ?? 'dplus')}</div>
-          </div>
-        ))}
-        {items.length === 0 && <p className="hint">{isAdmin ? '등록된 D-day가 없습니다 — 클릭해서 추가' : ''}</p>}
-        <Modal open={open} onClose={() => setOpen(false)} title="D-day 관리"
-          desc="추가 · 수정 · 삭제 · ⠿ 드래그로 순서 조정 — 환경설정 「위젯」에서도 관리 가능"
-          actions={<button className="btn btn-dark" onClick={() => setOpen(false)}>CLOSE</button>}>
-          {open && <DdayEditor conf={conf} />}
-        </Modal>
-      </div>
-    );
-  }
+  /* 관리는 편집모드 우클릭 → 설정, 또는 환경설정 「위젯」에서만 (커플홈 사용자 요청 — 평소에 클릭하면
+     관리창이 열리던 것이 번거롭다). 텍스트형은 별도 위젯(D-DAY 텍스트)으로 갈라졌다 */
+  useEditEvent(conf.id, () => setOpen(true));
   return (
-    <div className="panel widget" style={{ cursor: isAdmin ? 'pointer' : undefined }}
-      onClick={e => { if ((e.target as HTMLElement).closest('.modal-ov')) return; if (isAdmin && !editOn) setOpen(true); }}>
-      <h4>D-DAY {isAdmin && <span className="more">관리 ›</span>}</h4>
+    <div className="panel widget">
+      <h4>D-DAY</h4>
       {items.map((it, i) => {
         const d = ddayLabel(it.date, it.plusOne);
         return (
@@ -321,12 +288,54 @@ export function DdayWidget({ conf }: { conf: WidgetConf }) {
           </div>
         );
       })}
-      {items.length === 0 && <p className="hint">등록된 D-day가 없습니다</p>}
+      {items.length === 0 && <p className="hint">{isAdmin ? '등록된 D-day가 없습니다 — 편집모드에서 우클릭 → 설정' : '등록된 D-day가 없습니다'}</p>}
 
       <Modal open={open} onClose={() => setOpen(false)} title="D-day 관리"
         desc="추가 · 수정 · 삭제 · ⠿ 드래그로 순서 조정 — 환경설정 「위젯」에서도 관리 가능"
         actions={<button className="btn btn-dark" onClick={() => setOpen(false)}>CLOSE</button>}>
         {open && <DdayEditor conf={conf} />}
+      </Modal>
+    </div>
+  );
+}
+
+/* ---------- D-DAY 텍스트 (커플홈 사용자 요청) — 디데이 하나를 패널 없이 글씨만: 제목(폰트1) + 날짜 글씨(폰트2).
+   고정 형식은 D+123 / 123일, 자유 형식은 적어 둔 문장(「사랑한지 [[Dday]]일 째」)의 [[Dday]] 자리에 날 수.
+   리스트(D-DAY)는 하나만, 이 위젯은 여러 개 추가할 수 있다 ---------- */
+export function DdayTextWidget({ conf }: { conf: WidgetConf }) {
+  const { isAdmin } = useAuth();
+  const { familyOf } = useFonts();
+  const [open, setOpen] = useState(false);
+  const s = conf.settings as DdayTextSettings;
+  const it = ((conf.settings.items as DdayItem[]) ?? [])[0];
+  const dFontId = (conf.settings.fontId as string | undefined) ?? 'serif';
+  const dColor = conf.settings.color as string | undefined;
+  useEditEvent(conf.id, () => setOpen(true));   // 관리는 편집모드 우클릭 → 설정 (환경설정 「위젯」에서도)
+  const ready = !!it && /^\d{4}-\d{2}-\d{2}$/.test(it.date);
+  return (
+    <div className="dday-text" style={{ textAlign: s.align ?? 'center' }}>
+      {ready ? (
+        <div className="dday-tx">
+          {it.title && (
+            <div className="t" style={{
+              fontFamily: s.titleFontId ? familyOf(s.titleFontId) : undefined,
+              fontSize: s.titleSize ? `calc(${s.titleSize}px*var(--fs,1))` : undefined,
+              color: s.titleColor,
+            }}>{it.title}</div>
+          )}
+          <div className="n" style={{
+            fontFamily: familyOf(dFontId),
+            fontSize: s.textSize ? `calc(${s.textSize}px*var(--fs,1))` : undefined,
+            color: dColor,
+          }}>{ddayText(it, s.format ?? 'fixed', s.numStyle ?? 'dplus')}</div>
+        </div>
+      ) : (
+        <p className="hint">{isAdmin ? 'D-day 날짜를 정해 주세요 — 편집모드에서 우클릭 → 설정' : ''}</p>
+      )}
+      <Modal open={open} onClose={() => setOpen(false)} title="D-day 텍스트"
+        desc="디데이 하나 — 제목·날짜·문장과 폰트 · 환경설정 「위젯」에서도 관리 가능"
+        actions={<button className="btn btn-dark" onClick={() => setOpen(false)}>CLOSE</button>}>
+        {open && <DdayTextEditor conf={conf} />}
       </Modal>
     </div>
   );
@@ -708,6 +717,7 @@ export function renderWidget(conf: WidgetConf) {
     case 'diary': return <DiaryWidget />;
     case 'latest': return <LatestWidget />;
     case 'dday': return <DdayWidget conf={conf} />;
+    case 'ddaytext': return <DdayTextWidget conf={conf} />;
     case 'todo': return <TodoWidget conf={conf} />;
     case 'upcoming': return <UpcomingWidget />;
     case 'freetext': return <FreeTextWidget conf={conf} />;

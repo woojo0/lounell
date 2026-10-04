@@ -45,7 +45,7 @@ import { CroppedBlobImg } from '@/components/ui/CropEditor';
 import { useLocalList } from '@/lib/postStore';
 import { Mood, MOOD_SEED, moodTint, useDiarySettings, DiaryCat } from '@/lib/diaryStore';
 import {
-  TextSettingEditor, DdayEditor, TodoEditor, BannerEditor, DecoEditor,
+  TextSettingEditor, DdayEditor, DdayTextEditor, TodoEditor, BannerEditor, DecoEditor,
 } from '@/components/main/widgetEditors';
 import { useBgm, BgmTrack, parseVideoId, MAIN_LIST } from '@/lib/bgmStore';
 import { useFonts, fontCssUrl, FontDef, FontRole, ROLE_LABEL, FOLLOW_MENU, FOLLOW_TITLE } from '@/lib/fontStore';
@@ -613,13 +613,14 @@ function WidgetsPane() {
   const { state } = useMainStore();
   // 설정값이 있는 위젯만 — 실데이터 연동 위젯(DIARY·LATEST·UPCOMING)과 메뉴리스트·회원정보창은 설정값 없음
   const editable = state.widgets.filter(w =>
-    (['banner', 'memo', 'dday', 'todo', 'freetext', 'deco'] as const).some(t => t === w.type));
+    (['banner', 'memo', 'dday', 'ddaytext', 'todo', 'freetext', 'deco'] as const).some(t => t === w.type));
 
   const editorOf = (w: WidgetConf) => {
     switch (w.type) {
       case 'memo':
       case 'freetext': return <TextSettingEditor conf={w} />;
       case 'dday': return <DdayEditor conf={w} />;
+      case 'ddaytext': return <DdayTextEditor conf={w} />;
       case 'todo': return <TodoEditor conf={w} />;
       case 'deco': return <DecoEditor conf={w} />;
       case 'banner': return <BannerEditor conf={w} />;

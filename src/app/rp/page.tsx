@@ -150,6 +150,16 @@ export default function RpPage() {
   // 상대의 입력 중 — at이 최근(TYPING_TTL) 안인 것만. 1초마다 다시 봐서 멈추면 저절로 사라진다
   const [tick, setTick] = useState(0);
   useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 1000); return () => clearInterval(t); }, []);
+  const typersCount = useRef(0);
+  useEffect(() => {
+    const el = msgsRef.current;
+    const n = typersCountNow();
+    if (el && n !== typersCount.current) {
+      typersCount.current = n;
+      // 방금 늘어난 줄 높이(≈30px) + 여유 안이면 「맨 아래를 보고 있던」 것으로
+      if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) el.scrollTop = el.scrollHeight;
+    }
+  });
   const typers = useMemo(() => {
     void tick;
     if (!sel || !user) return [] as string[];
@@ -158,6 +168,9 @@ export default function RpPage() {
       .filter(r => r.roomId === sel.id && r.authorId !== user.id && now - Date.parse(r.at) < TYPING_TTL)
       .map(r => (r.charId && rpChars.find(c => c.id === r.charId)?.name) || '상대');
   }, [typingRows, sel, user, rpChars, tick]);
+  const typersRef = useRef(typers);
+  typersRef.current = typers;
+  function typersCountNow() { return typersRef.current.length; }
   const [plainRp, setPlainRp] = useState(false);   // 메신저 방에서 「일반 RP」로 보내기 (커플홈 사용자 요청) — 원래 역극 모양
   const [pendingImg, setPendingImg] = useState<{ file: File; url: string } | null>(null);   // 보낼 사진 (메신저 방, 커플홈)
   const [lbImg, setLbImg] = useState<string | null>(null);   // 사진 크게 보기
@@ -551,12 +564,13 @@ export default function RpPage() {
                 {msgsOf(sel).length === 0 && (
                   <p className="hint" style={{ textAlign: 'center', marginTop: 30 }}>첫 메시지를 남겨보세요</p>
                 )}
+                {/* 상대가 입력 중 — 메시지 영역 **안** 맨 아래 (커플홈 사용자 제보: 입력창 위에 끼우면 메시지 영역
+                    높이가 줄어 스크롤이 덜컹거렸다). 스크롤에 포함되므로 영역 높이는 그대로다 */}
+                {sel.status === 'ongoing' && typers.length > 0 && (
+                  <div className="rp-typing"><b>{typers.join(', ')}</b> is typing<span className="dots"><i>.</i><i>.</i><i>.</i></span></div>
+                )}
               </div>
 
-              {/* 상대가 입력 중 — 입력창 바로 위 (커플홈 사용자 요청) */}
-              {sel.status === 'ongoing' && typers.length > 0 && (
-                <div className="rp-typing"><b>{typers.join(', ')}</b> is typing<span className="dots"><i>.</i><i>.</i><i>.</i></span></div>
-              )}
               {sel.status === 'ongoing' && (
                 <div className={`rp-input${imsg ? ' imsg' : ''}`}>
                   {/* 발화자 선택 — 캐릭터 / 지문 (v2.0 사용자 확정: 역극에는 이 둘만 있으면 된다) */}

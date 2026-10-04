@@ -124,6 +124,8 @@ export const COLLECTION_OF: Record<string, string> = {
   'ohome.thrposts.v1': 'thread_posts',
   // Videos 게시판 (커플홈 사용자 요청) — 영상 하나를 파일·링크로 올리는 글. 갤러리와 따로 둔다
   'ohome.videos.v1': 'videos',
+  // 역극 입력 중 표시 (커플홈) — 사람마다 문서 하나, 임시값. 백업 대상 아님
+  'ohome.rptyping.v1': 'rp_typing',
   // 알림 — 기기 보관이던 것을 서버로 (v2.0 포크 제보 「알림이 안 와요」).
   // 행 주인(authorId)을 받는 사람으로 적어, 받는 사람 계정이 어느 기기에서나 받아 간다
   'ohome.notif.v1': 'notifications',

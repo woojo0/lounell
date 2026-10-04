@@ -32,6 +32,7 @@ const AREA: Record<string, { kind?: SectionKind; href?: string; board?: boolean 
   memos: { kind: 'memo' },   // 메모장 페이지마다 메뉴 공개범위가 다를 수 있다 (커플홈 — 소속은 secId)
   videos: { kind: 'videos' },   // Videos 게시판 (커플홈) — 소속은 secId
   rp_rooms: { href: '/rp' },
+  rp_typing: { href: '/rp' },   // 입력 중 표시 (커플홈) — 역극과 같은 공개범위
   characters: { kind: 'chars' },
   relations: { href: '/rels' },
   trpg_chars: { href: '/tchars' },

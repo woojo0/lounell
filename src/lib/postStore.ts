@@ -10,6 +10,10 @@ import { currentUserId } from './currentUser';
 /** 목록 저장 실패 알림 (v2.0) — 조용히 되돌리면 "쓴 게 바로 지워진다"로만 보여 원인을 알 수 없다.
  *  ListSync가 받아 화면에 띄운다 (설정 저장 실패 알림과 같은 방식) */
 export const LIST_ERR_EVT = 'ohome-list-error';
+/** 저장 실패를 안내하지 않을 표 (커플홈) — 입력 중 표시처럼 임시 데이터는 규칙이 아직 없어도 홈을 막지 않는다.
+ *  대신 LIST_QUIET_ERR_EVT로만 알려서, 쓰는 쪽이 그만두게 한다 */
+export const QUIET_TABLES = new Set(['rp_typing']);
+export const LIST_QUIET_ERR_EVT = 'ohome-list-quiet-error';
 /** 같은 탭 안에서 목록이 바뀌었을 때 (로컬 모드) — detail: { key, next } */
 const LIST_EVT = 'ohome-list';
 
@@ -172,7 +176,7 @@ export function useLocalList<T extends { id?: string }>(key: string, seed: T[]):
           // 되돌리기만 하면 "방금 쓴 게 스스로 사라지는" 것처럼 보이므로 이유도 함께 알린다 (v2.0)
           console.error('[ohome] 저장 실패', err);
           try {
-            window.dispatchEvent(new CustomEvent(LIST_ERR_EVT, {
+            window.dispatchEvent(new CustomEvent(QUIET_TABLES.has(table) ? LIST_QUIET_ERR_EVT : LIST_ERR_EVT, {
               detail: { table, message: err instanceof Error ? err.message : String(err) },
             }));
           } catch { /* 무시 */ }

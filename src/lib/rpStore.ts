@@ -130,3 +130,20 @@ export function rpHasNew(r: RpRoom, userId: string, msgs: RpMessage[]): boolean 
 
 /* ---------- 시드 (프로토타입 데모 계승 — admin·guest 참여) ---------- */
 export const RP_SEED: RpRoom[] = [];
+
+/* ---------- 입력 중 표시 (커플홈 사용자 요청 — 상대가 치고 있으면 입력창 위에 「캐릭터 is typing...」) ----------
+   사람마다 문서 하나(id = 방id:회원id). 글자를 칠 때 몇 초에 한 번 at을 갱신하고, 보내거나 비우면 지운다.
+   받는 쪽은 at이 TYPING_TTL 안이면 띄운다 — 방 문서를 건드리지 않으므로 서로의 저장을 덮어쓸 일이 없다 */
+export const RP_TYPING_KEY = 'ohome.rptyping.v1';
+export interface RpTyping {
+  id: string;
+  roomId: string;
+  authorId: string;        // 치고 있는 회원 (문서 주인 — 본인만 고치고 지운다)
+  charId?: string;         // 그때 고른 발화 캐릭터 — 이름 표시용
+  at: string;              // 마지막 갱신 시각 (ISO)
+  visibility: 'member';    // 로그인한 회원만 읽는다
+}
+export const RP_TYPING_SEED: RpTyping[] = [];
+/** 이 시간 안에 갱신이 없으면 입력을 멈춘 것으로 본다 (ms) */
+export const TYPING_TTL = 6000;
+export const typingId = (roomId: string, userId: string) => `${roomId}:${userId}`;

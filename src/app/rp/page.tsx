@@ -4,11 +4,10 @@
 // ※ 실시간 송수신·입력 중 표시·참여자 전원 동의는 Supabase Realtime 연동 시 활성화 (현재 localStorage)
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
-import { useLocalList, newId } from '@/lib/postStore';
+import { useLocalList, newId, LIST_QUIET_ERR_EVT } from '@/lib/postStore';
 import {
   RpRoom, RpMessage, RP_SEED, hexRgb, rpLastDate, rpHasNew,
-  RpMessageRow, RP_MSG_KEY, RP_MSG_SEED, messagesFor, rpMarkRead, rpMemberIds,
-} from '@/lib/rpStore';
+  RpMessageRow, RP_MSG_KEY, RP_MSG_SEED, messagesFor, rpMarkRead, rpMemberIds, RpTyping, RP_TYPING_KEY, RP_TYPING_SEED, TYPING_TTL, typingId } from '@/lib/rpStore';
 import { Character, CHAR_SEED, Relation, REL_SEED, charGrant, charWithAu, pairSides } from '@/lib/charStore';
 import { phStyle } from '@/lib/color';
 import { Modal, ConfirmModal, useConfirmDelete } from '@/components/ui/Modal';
@@ -117,6 +116,48 @@ export default function RpPage() {
   }, [sel?.id, msgRows.length]);
 
   const [text, setText] = useState('');
+  /* 입력 중 표시 (커플홈 사용자 요청 — 상대가 치고 있으면 「캐릭터 is typing...」) — 사람마다 문서 하나.
+     3초에 한 번만 at을 갱신하고(쓰기 절약), 보내거나 비우면 지운다. 저장이 거부되면(규칙 미갱신 등) 조용히 그만둔다 */
+  const [typingRows, setTypingRows] = useLocalList<RpTyping>(RP_TYPING_KEY, RP_TYPING_SEED);
+  const typingRowsRef = useRef(typingRows);
+  typingRowsRef.current = typingRows;
+  const lastPing = useRef<{ roomId: string; at: number } | null>(null);
+  const typingOff = useRef(false);
+  useEffect(() => {
+    const h = (e: Event) => { if ((e as CustomEvent<{ table: string }>).detail?.table === 'rp_typing') typingOff.current = true; };
+    window.addEventListener(LIST_QUIET_ERR_EVT, h);
+    return () => window.removeEventListener(LIST_QUIET_ERR_EVT, h);
+  }, []);
+  const pingTyping = (on: boolean) => {
+    if (!sel || !user || typingOff.current) return;
+    const id = typingId(sel.id, user.id);
+    const rows = typingRowsRef.current;
+    if (!on) {
+      lastPing.current = null;
+      if (rows.some(r => r.id === id)) setTypingRows(rows.filter(r => r.id !== id));
+      return;
+    }
+    const now = Date.now();
+    if (lastPing.current && lastPing.current.roomId === sel.id && now - lastPing.current.at < 3000) return;
+    lastPing.current = { roomId: sel.id, at: now };
+    const row: RpTyping = {
+      id, roomId: sel.id, authorId: user.id,
+      charId: speaker && speaker !== 'desc' ? speaker : undefined,
+      at: new Date(now).toISOString(), visibility: 'member',
+    };
+    setTypingRows([...rows.filter(r => r.id !== id), row]);
+  };
+  // 상대의 입력 중 — at이 최근(TYPING_TTL) 안인 것만. 1초마다 다시 봐서 멈추면 저절로 사라진다
+  const [tick, setTick] = useState(0);
+  useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 1000); return () => clearInterval(t); }, []);
+  const typers = useMemo(() => {
+    void tick;
+    if (!sel || !user) return [] as string[];
+    const now = Date.now();
+    return typingRows
+      .filter(r => r.roomId === sel.id && r.authorId !== user.id && now - Date.parse(r.at) < TYPING_TTL)
+      .map(r => (r.charId && rpChars.find(c => c.id === r.charId)?.name) || '상대');
+  }, [typingRows, sel, user, rpChars, tick]);
   const [plainRp, setPlainRp] = useState(false);   // 메신저 방에서 「일반 RP」로 보내기 (커플홈 사용자 요청) — 원래 역극 모양
   const [pendingImg, setPendingImg] = useState<{ file: File; url: string } | null>(null);   // 보낼 사진 (메신저 방, 커플홈)
   const [lbImg, setLbImg] = useState<string | null>(null);   // 사진 크게 보기
@@ -145,6 +186,7 @@ export default function RpPage() {
     setMsgRows([...msgRows, ...out.map(m => ({ ...m, roomId: sel.id }))]);
     rpMarkRead(sel.id, user.id, out[out.length - 1].date);
     setText('');
+    pingTyping(false);   // 보냈으니 입력 중 표시는 지운다
     if (img) { URL.revokeObjectURL(img.url); setPendingImg(null); }
     // 알림 (4.13) — 나를 제외한 참여자에게, 방 단위로 묶어서 (디스코드 DM은 봇 연동 시)
     memberIdsOf(sel).filter(id => id !== user.id).forEach(id =>
@@ -511,6 +553,10 @@ export default function RpPage() {
                 )}
               </div>
 
+              {/* 상대가 입력 중 — 입력창 바로 위 (커플홈 사용자 요청) */}
+              {sel.status === 'ongoing' && typers.length > 0 && (
+                <div className="rp-typing"><b>{typers.join(', ')}</b> is typing<span className="dots"><i>.</i><i>.</i><i>.</i></span></div>
+              )}
               {sel.status === 'ongoing' && (
                 <div className={`rp-input${imsg ? ' imsg' : ''}`}>
                   {/* 발화자 선택 — 캐릭터 / 지문 (v2.0 사용자 확정: 역극에는 이 둘만 있으면 된다) */}
@@ -562,7 +608,7 @@ export default function RpPage() {
                       )}
                       {/* 플레이스홀더 없음 (v1.8) · Enter 전송 / Shift+Enter 줄바꿈 · /desc 명령 지원
                           포커스 중엔 모바일에서 역극 영역만 표시 (v1.9 — blur는 SEND 클릭이 씹히지 않게 지연) */}
-                      <KTextarea style={{ minHeight: 44 }} value={text} onChange={e => setText(e.target.value)}
+                      <KTextarea style={{ minHeight: 44 }} value={text} onChange={e => { setText(e.target.value); pingTyping(e.target.value.trim().length > 0); }}
                         onFocus={() => setMFocus(true)}
                         onBlur={() => setTimeout(() => setMFocus(false), 180)}
                         onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); } }}

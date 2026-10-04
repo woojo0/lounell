@@ -78,6 +78,7 @@ declare content_tables text[] := array[
   'dotori',       -- 도토리
   'playlog',      -- 플레이기록
   'rp_rooms',     -- 역극 방
+  'rp_typing',    -- 역극 입력 중 표시 (커플홈 — 사람마다 한 줄, 임시)
   'threads',      -- 감상타래
   'diary',        -- 다이어리
   'memos',        -- 스티커 메모
@@ -209,7 +210,7 @@ do $$
 declare t text;
 begin
   -- 발화·답변·댓글이 각자 행으로 분리됐으므로(v2.0) 실시간도 그 테이블을 봐야 한다
-  foreach t in array array['rp_rooms', 'rp_messages', 'relations', 'qa_answers', 'posts', 'comments', 'guestbook', 'notifications', 'thread_posts'] loop
+  foreach t in array array['rp_rooms', 'rp_messages', 'rp_typing', 'relations', 'qa_answers', 'posts', 'comments', 'guestbook', 'notifications', 'thread_posts'] loop
     begin
       execute format('alter publication supabase_realtime add table public.%I', t);
     exception when others then null;  -- 이미 추가돼 있으면 무시

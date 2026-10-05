@@ -510,7 +510,7 @@ a{color:inherit;text-decoration:none}
 .msg .who{font-size:calc(10.5px*var(--fs,1));color:rgb(var(--cc));font-weight:700;margin-bottom:3px;letter-spacing:.05em}
 .msg .bub{padding:10px 14px;border-radius:13px;border-top-left-radius:4px;font-size:calc(12.5px*var(--fs,1));line-height:1.7;
   background:rgba(var(--cc),.10);border:1px solid rgba(var(--cc),.22);color:var(--ink);white-space:pre-line}
-.msg.me{margin-left:auto;flex-direction:row-reverse;text-align:right}
+.msg.me{margin-left:auto;flex-direction:row-reverse}   /* 내 메시지 — 말풍선만 오른쪽, 글씨는 왼쪽 정렬 (커플홈 사용자 요청: 글씨까지 오른쪽일 필요는 없다) */
 .msg.me .bub{border-radius:13px;border-top-right-radius:4px}
 /* 지문(디스크립션) — 캐릭터 없이 가운데 정렬 서술 (v1.8) */
 .msg-desc{align-self:center;text-align:center;max-width:82%;font-size:calc(12.5px*var(--fs,1));line-height:1.8;color:#4a505a;padding:2px 0;white-space:pre-line;position:relative}
@@ -580,8 +580,6 @@ a{color:inherit;text-decoration:none}
 /* 메신저 방의 일반 RP — 얼굴 칸을 문자 말풍선과 같은 크기·간격(26px + 14px)으로 두어 말풍선 출발선이 맞는다.
    이어지는 글은 빈 칸(.spacer)만 두고, 내 글은 얼굴이 아예 없다 */
 .rp-msgs.imsg .msg{gap:14px;align-items:flex-end}
-/* 메신저 방의 내 일반 RP — 말풍선만 오른쪽에 두고 글씨는 왼쪽 정렬 (커플홈 사용자 요청: 글씨까지 오른쪽일 필요는 없다) */
-.rp-msgs.imsg .msg.me{text-align:left}
 .rp-msgs.imsg .msg .face{width:26px;height:26px;border-radius:50%}
 .rp-msgs.imsg .msg .face.spacer{visibility:hidden}
 .rp-input.imsg textarea{border-radius:20px;padding:10px 14px;min-height:40px!important;background:var(--panel-solid)}

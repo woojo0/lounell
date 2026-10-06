@@ -15,11 +15,11 @@ import {
   ThreadWork, ThreadPost, THREAD_SEED, useThreadSettings, threadCats, catLabel, threadBadgeStyle, lastDate, fmtMD, fmtMDHM,
   THR_POST_KEY, THR_POST_SEED, ThreadPostRow, MergedPost, postsOf, threadPartnerIds,
 } from '@/lib/threadStore';
-import { Character, CHAR_SEED, inCharChoices, Relation, REL_SEED, charInAu, charAuOptions } from '@/lib/charStore';
+import { Character, CHAR_SEED, inCharChoices, Relation, REL_SEED, charInAu, charAuOptions , faceCropOf } from '@/lib/charStore';
 import { useMembers, type MemberLite } from '@/lib/members';
 import { useFonts } from '@/lib/fontStore';
 import { putBlob, BlobImg, useBlobUrl } from '@/lib/blobStore';
-import { CroppedBlobImg } from '@/components/ui/CropEditor';
+import { CroppedBlobImg , type CropValue } from '@/components/ui/CropEditor';
 import { SearchBar, KTextarea, KInput, KSelect } from '@/components/ui/Kit';
 import { GuestIdBar } from '@/components/ui/GuestId';
 import { Modal, useConfirmDelete } from '@/components/ui/Modal';
@@ -76,11 +76,12 @@ function PostImgs({ p, onOpen }: { p: ThreadPost; onOpen: (ids: string[], idx: n
 }
 
 /** 캐릭터 얼굴(없으면 테마색 원) + 이름 — 캐입 글·댓글 공용 (커플홈) */
-function CharTag({ ch, className }: { ch: Character; className: string }) {
+function CharTag({ ch, className, crop }: { ch: Character; className: string; crop?: CropValue }) {
   return (
     <b className={`${className} as-char`}>
       <span className="cf" style={{ background: ch.color, ['--cc' as string]: ch.color }}>
-        {ch.thumbId && <CroppedBlobImg fileRef={ch.thumbId} crop={ch.thumbCrop} />}
+        {/* 얼굴칸 위치는 자관(·AU)에서 잡아 둔 값 (커플홈 사용자 제보) */}
+        {ch.thumbId && <CroppedBlobImg fileRef={ch.thumbId} crop={crop ?? ch.thumbCrop} />}
       </span>
       {ch.name}
     </b>
@@ -92,7 +93,7 @@ function CharTag({ ch, className }: { ch: Character; className: string }) {
 function CmtWho({ c, chars, rels }: { c: Comment; chars: Character[]; rels: Relation[] }) {
   const base = c.charId ? chars.find(x => x.id === c.charId) : undefined;
   const ch = base ? charInAu(base, rels, c.auKey) : undefined;   // AU 캐릭터로 쓴 댓글은 그 AU 모습으로 (커플홈)
-  return ch ? <CharTag ch={ch} className="cmt-char" /> : <b>{c.author}</b>;
+  return ch ? <CharTag ch={ch} crop={faceCropOf(ch, rels, { auKey: c.auKey })} className="cmt-char" /> : <b>{c.author}</b>;
 }
 
 /** 글쓴이 (커플홈) — 캐입 글이면 캐릭터, 아니면 지금 닉네임(못 찾으면 쓸 당시 이름).
@@ -100,7 +101,7 @@ function CmtWho({ c, chars, rels }: { c: Comment; chars: Character[]; rels: Rela
 function PostWho({ p, chars, rels, pool }: { p: MergedPost; chars: Character[]; rels: Relation[]; pool: MemberLite[] }) {
   const base = p.charId ? chars.find(x => x.id === p.charId) : undefined;
   const ch = base ? charInAu(base, rels, p.auKey) : undefined;   // AU 캐릭터로 쓴 글은 그 AU 모습으로 (커플홈)
-  if (ch) return <CharTag ch={ch} className="who" />;
+  if (ch) return <CharTag ch={ch} crop={faceCropOf(ch, rels, { auKey: p.auKey })} className="who" />;
   const name = p.charId ? p.author
     : p.authorId ? pool.find(m => m.id === p.authorId)?.nickname ?? p.author : undefined;
   return name ? <b className="who">{name}</b> : null;

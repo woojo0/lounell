@@ -487,6 +487,25 @@ export const findChar = (chars: Character[], id: string) => chars.find(c => c.id
 
 /* ---------- 페이지 주소 별명 (v2.0 사용자 요청) ---------- */
 /** 주소로 항목 찾기 — id로도, 별명으로도 열린다 (별명을 바꿔도 옛 주소가 살아 있게) */
+/** 1:1 얼굴칸 위치 (커플홈 사용자 제보 — 자관에서 「썸네일 위치 조정」한 값이 역극 등 다른 얼굴칸에는 안 쓰였다).
+ *  자관에서 잡아 둔 값(멤버 faceCrop, AU를 보는 중이면 그 AU의 mset.faceCrop) 우선, 없으면 캐릭터의 3:4 썸네일 위치.
+ *  relId를 주면 그 자관, 없으면 캐릭터가 속한 첫 자관 · auKey(「자관id:AU id」)를 주면 그 AU에서 따로 잡은 값부터 본다 */
+export function faceCropOf(
+  c: Character | undefined, rels: Relation[], opt?: { relId?: string; auKey?: string },
+): import('@/components/ui/CropEditor').CropValue | undefined {
+  if (!c) return undefined;
+  const rel = (opt?.relId ? rels.find(r => r.id === opt.relId) : undefined)
+    ?? rels.find(r => r.members.some(m => m.charId === c.id));
+  const m = rel?.members.find(x => x.charId === c.id);
+  let auCrop: import('@/components/ui/CropEditor').CropValue | undefined;
+  if (rel && opt?.auKey) {
+    const i = opt.auKey.indexOf(':');
+    const rid = opt.auKey.slice(0, i), aid = opt.auKey.slice(i + 1);
+    if (rid === rel.id) auCrop = rel.aus.find(a => a.id === aid)?.mset?.[c.id]?.faceCrop;
+  }
+  return auCrop ?? m?.faceCrop ?? c.thumbCrop;
+}
+
 export const findByKey = <T extends { id: string; slug?: string }>(list: T[], key: string) =>
   list.find(x => x.id === key || (x.slug ?? '') === key);
 /** 이 캐릭터의 주소 — 별명을 정했으면 그것, 아니면 id */

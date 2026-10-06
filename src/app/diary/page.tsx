@@ -14,7 +14,7 @@ import {
   DiaryPost, DIARY_SEED, Mood, MOOD_SEED, moodTint, DIARY_PER_PAGE, useDiarySettings, diaryOrder,
 } from '@/lib/diaryStore';
 import {
-  Character, CHAR_SEED, Relation, REL_SEED, openableRels, pairSides, inCharChoices, charGrant, charPath, charInAu, auParamOf,
+  Character, CHAR_SEED, Relation, REL_SEED, openableRels, pairSides, inCharChoices, charGrant, charPath, charInAu, auParamOf, faceCropOf,
 } from '@/lib/charStore';
 import { useFonts } from '@/lib/fontStore';
 import { renderBody } from '@/lib/sanitize';
@@ -228,7 +228,8 @@ function DiaryPageInner() {
                 if (!baseCh) return;
                 router.push(catAu && ch !== baseCh ? `${charPath(baseCh)}?au=${encodeURIComponent(auParamOf(baseCh, rels, catAu))}` : charPath(baseCh));
               }}>
-              {ch?.thumbId && <CroppedBlobImg fileRef={ch.thumbId} crop={ch.thumbCrop} />}
+              {/* 얼굴칸 위치는 자관(·그 탭의 AU)에서 잡아 둔 값 (커플홈 사용자 제보) */}
+              {ch?.thumbId && <CroppedBlobImg fileRef={ch.thumbId} crop={faceCropOf(ch, rels, { relId: rel?.id, auKey: catAu })} />}
             </span>
             {/* 세로값 고정 + 글자 크기를 거기에 맞춘다 (커플홈 사용자 요청) — 두 칸 이름의 폰트가 달라도
                 머리 줄 높이가 같아서 아래 목록이 어긋나지 않는다 */}

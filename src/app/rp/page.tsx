@@ -8,11 +8,11 @@ import { useLocalList, newId, LIST_QUIET_ERR_EVT } from '@/lib/postStore';
 import {
   RpRoom, RpMessage, RP_SEED, hexRgb, rpLastDate, rpHasNew,
   RpMessageRow, RP_MSG_KEY, RP_MSG_SEED, messagesFor, rpMarkRead, rpMemberIds, RpTyping, RP_TYPING_KEY, RP_TYPING_SEED, TYPING_TTL, typingId } from '@/lib/rpStore';
-import { Character, CHAR_SEED, Relation, REL_SEED, charGrant, charWithAu, pairSides } from '@/lib/charStore';
+import { Character, CHAR_SEED, Relation, REL_SEED, charGrant, charWithAu, pairSides , faceCropOf } from '@/lib/charStore';
 import { phStyle } from '@/lib/color';
 import { Modal, ConfirmModal, useConfirmDelete } from '@/components/ui/Modal';
 import { KInput, KTextarea, KSelect, KCheck } from '@/components/ui/Kit';
-import { CroppedBlobImg } from '@/components/ui/CropEditor';
+import { CroppedBlobImg, type CropValue } from '@/components/ui/CropEditor';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useToast } from '@/components/ui/Toast';
 import { RpLogModal } from '@/components/rp/RpLogModal';
@@ -20,11 +20,11 @@ import { Lightbox } from '@/components/ui/Lightbox';
 import { putBlob, BlobImg } from '@/lib/blobStore';
 
 /** 캐릭터 얼굴 칩 (썸네일 or 데모 플레이스홀더) */
-function Face({ ch, className }: { ch?: Character; className: string }) {
+function Face({ ch, className, crop }: { ch?: Character; className: string; crop?: CropValue }) {
   // 사진이 없으면 캐릭터 테마색 자리표시자 (커플홈 사용자 요청)
   return (
     <div className={`${className} ${!ch?.thumbId ? `ph ${ch?.thumbClass ?? ''}` : ''}`} style={!ch?.thumbId ? phStyle([ch?.color]) : undefined}>
-      {ch?.thumbId && <CroppedBlobImg fileRef={ch.thumbId} crop={ch.thumbCrop} />}
+      {ch?.thumbId && <CroppedBlobImg fileRef={ch.thumbId} crop={crop ?? ch.thumbCrop} />}
     </div>
   );
 }
@@ -84,6 +84,8 @@ export default function RpPage() {
     () => (auCharKey ? chars.map(c => charWithAu(c, auCharKey)) : chars),
     [chars, auCharKey],
   );
+  /* 얼굴칸(1:1) 위치 — 자관에서 「썸네일 위치 조정」한 값을 여기서도 (커플홈 사용자 제보). 방의 AU면 그 AU 값부터 */
+  const faceOf = (c?: Character) => faceCropOf(c, rels, { relId: sel?.relId, auKey: auCharKey ?? undefined });
   const speakChars = useMemo(() => {
     if (rel) {
       // 발화자 목록도 자관에 보이는 순서(왼쪽 먼저)로 — 처음 고른 발화자가 왼쪽 캐릭터가 된다
@@ -523,7 +525,7 @@ export default function RpPage() {
                         {/* 시각 줄은 두지 않는다 (사용자 확정 — 만들어진 역극이라 실제 시간은 의미가 없다). 묶음만 가른다 */}
                         <div className={`im-msg ${rightSide ? 'me' : 'them'}${first ? ' first' : ''}${last ? ' last' : ''}`}
                           style={{ ['--cc' as string]: hexRgb(ch?.color) }}>
-                          {!rightSide && <span className="im-face">{runEnd && <Face ch={ch} className="f" />}</span>}
+                          {!rightSide && <span className="im-face">{runEnd && <Face ch={ch} crop={faceOf(ch)} className="f" />}</span>}
                           <div className="im-col">
                             {!rightSide && nameNeeded && <div className="im-who">{name}</div>}
                             {/* 사진은 아이폰 문자처럼 말풍선 없이 둥근 사진만 (사용자 확정) — 글이 같이 있으면 그 아래 글 말풍선 */}
@@ -545,8 +547,8 @@ export default function RpPage() {
                       {/* 메신저 방의 일반 RP: 내 글은 얼굴 없이(내 말풍선처럼 오른쪽 끝 맞춤), 상대 글은 묶음 끝에만 얼굴 —
                           이어지는 글은 빈자리만 두어 말풍선 출발선이 문자 말풍선과 같게 (사용자 확정) */}
                       {!imsg
-                        ? <Face ch={ch} className="face" />
-                        : !rightSide && (runEnd ? <Face ch={ch} className="face" /> : <span className="face spacer" />)}
+                        ? <Face ch={ch} crop={faceOf(ch)} className="face" />
+                        : !rightSide && (runEnd ? <Face ch={ch} crop={faceOf(ch)} className="face" /> : <span className="face spacer" />)}
                       <div>
                         {/* 메신저 방의 일반 RP 글은 말하는 캐릭터가 바뀔 때만 이름 (사용자 확정) */}
                         {nameNeeded && <div className="who">{name}</div>}
@@ -577,13 +579,13 @@ export default function RpPage() {
                   <div className="char-pick" onClick={() => setPickOpen(o => !o)}>
                     {speaker === 'desc'
                       ? <div className="f" style={{ display: 'grid', placeItems: 'center', fontSize: 13, color: 'var(--sub)' }}>❝</div>
-                      : <Face ch={speakerChar} className="f" />}
+                      : <Face ch={speakerChar} crop={faceOf(speakerChar)} className="f" />}
                     <small>{speakerLabel} ▾</small>
                     {pickOpen && (
                       <div className="rp-pick-pop" onClick={e => e.stopPropagation()}>
                         {speakChars.map(c => (
                           <button key={c.id} onClick={() => { setSpeaker(c.id); setPickOpen(false); }}>
-                            <Face ch={c} className="f" />{c.name}
+                            <Face ch={c} crop={faceOf(c)} className="f" />{c.name}
                           </button>
                         ))}
                         <button onClick={() => { setSpeaker('desc'); setPickOpen(false); }}>

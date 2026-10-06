@@ -8,8 +8,8 @@
  */
 import React, { useState } from 'react';
 import { useAuth } from '@/lib/auth';
-import { Comment, CommentRow, commentsFor, newId, fmtDate } from '@/lib/postStore';
-import { Character, inCharChoices } from '@/lib/charStore';
+import { Comment, CommentRow, commentsFor, newId, fmtDate, useLocalList } from '@/lib/postStore';
+import { Character, inCharChoices, Relation, REL_SEED, faceCropOf } from '@/lib/charStore';
 import { pushNotif, notifyAdmins } from '@/lib/notifStore';
 import { KInput, KSelect } from '@/components/ui/Kit';
 import { GuestIdBar } from '@/components/ui/GuestId';
@@ -18,13 +18,14 @@ import { useConfirmDelete } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 
 /** 댓글 이름 — 캐입이면 캐릭터 얼굴(없으면 테마색 원) + 이름, 캐릭터가 지워졌으면 쓸 당시 이름 */
-function Who({ c, chars }: { c: Comment; chars: Character[] }) {
+function Who({ c, chars, rels }: { c: Comment; chars: Character[]; rels: Relation[] }) {
   const ch = c.charId ? chars.find(x => x.id === c.charId) : undefined;
   if (!ch) return <b>{c.author}</b>;
   return (
     <b className="cmt-char as-char">
       <span className="cf" style={{ background: ch.color, ['--cc' as string]: ch.color }}>
-        {ch.thumbId && <CroppedBlobImg fileRef={ch.thumbId} crop={ch.thumbCrop} />}
+        {/* 얼굴칸 위치는 자관(·AU)에서 잡아 둔 값 (커플홈 사용자 제보) */}
+        {ch.thumbId && <CroppedBlobImg fileRef={ch.thumbId} crop={faceCropOf(ch, rels, { auKey: c.auKey })} />}
       </span>
       {ch.name}
     </b>
@@ -43,6 +44,7 @@ export function CharComments({ target, targetId, rows, setRows, chars, notify }:
   const { user, isAdmin } = useAuth();
   const toast = useToast();
   const del = useConfirmDelete();
+  const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);   // 얼굴칸 위치(자관 faceCrop)용 (커플홈)
   const [text, setText] = useState('');
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [gName, setGName] = useState('');
@@ -97,7 +99,7 @@ export function CharComments({ target, targetId, rows, setRows, chars, notify }:
         <React.Fragment key={c.id}>
           {[c, ...childrenOf(c.id)].map((x, i) => (
             <div key={x.id} className={`cmt ${i > 0 ? 'reply-depth' : ''}`}>
-              <Who c={x} chars={chars} /><small>{fmtDate(x.date)}</small>
+              <Who rels={rels} c={x} chars={chars} /><small>{fmtDate(x.date)}</small>
               {i === 0 && (
                 <small style={{ cursor: 'var(--cur-pointer,pointer)', color: 'var(--accent)', marginLeft: 8 }}
                   onClick={() => setReplyTo(replyTo === x.id ? null : x.id)}>

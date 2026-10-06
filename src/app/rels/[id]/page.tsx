@@ -13,7 +13,7 @@ import {
   auMember, auStyle, fullShadow, hasRelGrant,
   RelAu, RelCpTag, charWithAu, charGrant,
   QaAnswerRow, QA_KEY, QA_SEED, MergedAnswer, answersFor,
-  findByKey, charPath, relPath, openableRels, relMenuHref, auParamOf,
+  findByKey, charPath, relPath, openableRels, relMenuHref, auParamOf, faceCropOf,
 } from '@/lib/charStore';
 import { RelQuestionSet, RELQ_SEED, RELQ_KEY, CP_LABEL } from '@/lib/relqStore';
 import { putBlob } from '@/lib/blobStore';
@@ -60,15 +60,16 @@ function FaceCropModal({ fileRef, crop, onClose, onApply }: {
 }
 
 /** 캐릭터 대표 이미지 — 등록돼 있으면 실제 이미지, 없을 때만 기존 플레이스홀더 */
-function CharFace({ c, className, style }: {
+function CharFace({ c, className, style, crop }: {
   c?: Character; className?: string; style?: React.CSSProperties;
+  crop?: CropValue;   // 자관에서 잡아 둔 1:1 위치 (없으면 캐릭터의 3:4 썸네일 위치)
 }) {
   const rep = c?.thumbId ?? c?.arts?.[0];
   // 이미지가 없으면 캐릭터 테마색 자리표시자 (커플홈 사용자 요청)
   if (!rep) return <div className={`${className ?? ''} ph ${c?.thumbClass ?? ''}`} style={{ ...phStyle([c?.color]), ...style }} />;
   return (
     <div className={className} style={{ position: 'relative', overflow: 'hidden', ...style }}>
-      <CroppedBlobImg fileRef={rep} crop={c?.thumbCrop} />
+      <CroppedBlobImg fileRef={rep} crop={crop ?? c?.thumbCrop} />
     </div>
   );
 }
@@ -828,11 +829,14 @@ export default function RelDetailPage() {
           ? { ...a, mset: { ...a.mset, [cid]: { ...a.mset?.[cid], faceCrop: c } } }
           : a)),
       });
+      setFaceEdit(null);   // AU에서도 저장하면 창을 닫는다 (커플홈 사용자 제보 — SAVE를 눌러도 안 닫혔다)
       return;
     }
     updateRel({ members: rel.members.map(m => (m.charId === cid ? { ...m, faceCrop: c } : m)) });
     setFaceEdit(null);
   };
+  /** 이 자관(·보고 있는 AU)에서 잡아 둔 1:1 얼굴 위치 — 문답 등 작은 얼굴칸이 멤버 카드와 같은 위치를 쓴다 */
+  const faceOf = (c?: Character) => faceCropOf(c, rels, { relId: rel.id, auKey: isBaseAu ? undefined : `${rel.id}:${auId}` });
 
   return (
     <section className="page page-rel-detail">
@@ -1287,7 +1291,7 @@ export default function RelDetailPage() {
                           setQaPickPos({ left: r.left, top: Math.max(8, r.top - h - 6) });
                         }
                       }}>
-                        <CharFace c={charOf(qaChar ?? answerableIds[0])} className="f" />
+                        <CharFace c={charOf(qaChar ?? answerableIds[0])} crop={faceOf(charOf(qaChar ?? answerableIds[0]))} className="f" />
                         <small style={{ fontFamily: nameFont(charOf(qaChar ?? answerableIds[0])?.fontId) }}>
                           {charOf(qaChar ?? answerableIds[0])?.name}{answerableIds.length > 1 ? ' ▾' : ''}
                         </small>
@@ -1298,7 +1302,7 @@ export default function RelDetailPage() {
                               return (
                                 <div key={cid} style={{ display: 'flex', gap: 8, alignItems: 'center' }}
                                   onClick={e2 => { e2.stopPropagation(); setQaChar(cid); setQaPickPos(null); }}>
-                                  <CharFace c={c} style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0 }} />
+                                  <CharFace c={c} crop={faceOf(c)} style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0 }} />
                                   <span style={{ fontFamily: nameFont(c?.fontId) }}>{c?.name}</span>
                                 </div>
                               );

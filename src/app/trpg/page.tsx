@@ -1,7 +1,7 @@
 'use client';
 // RP LOG (옛 TRPG 로그 백업, 4.3 — 커플홈에서 이름 변경) — 티켓형/기본형 스킨 · 우측 자관 뱃지 필터 · ＋ ADD LOG
 // 본문 입력 3방식: 파일 업로드(.txt/.html 내용 자동 판별) / HTML 붙여넣기 / 직접 작성
-import React, { Fragment, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useSectionParam, filterSection, sectionSetter, secStamp, MAIN_SEC } from '@/lib/sectionStore';
@@ -14,6 +14,7 @@ import { isValidSlug, slugify } from '@/lib/link';
 import { Relation, REL_SEED, Character, CHAR_SEED } from '@/lib/charStore';
 import { SearchBar, KInput, KTextarea, KRadio, KSelect, KDate, Pager } from '@/components/ui/Kit';
 import { Modal } from '@/components/ui/Modal';
+import { TagInput } from '@/components/ui/TagInput';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { putBlob } from '@/lib/blobStore';
 import { ColorField } from '@/components/ui/ColorField';
@@ -67,7 +68,10 @@ function TrpgPageInner() {
     if (nb.some((b, i) => b !== bodies[i])) setBodies(nb);
   }, [isAdmin, user, logsLoaded, bodiesLoaded, menuLoaded, members, menuSet, logsAll, bodies, setLogsAll, setBodies]);
   const { editOn } = useMainStore();          // 편집모드 — 상단바 토글 (다른 목록과 공통)
-  const [filter, setFilter] = useState<string>('all');
+  // 태그 필터 (커플홈 사용자 요청 — 자관이 하나뿐이라 자관 필터 대신). 자관(·AU) 필터는 자관 페이지의 「로그 더보기」(?rel=&au=)로
+  // 들어왔을 때만 조용히 걸리고, 위쪽 알약으로 풀 수 있다
+  const [tagFilter, setTagFilter] = useState<string>('all');
+  const [relFilter, setRelFilter] = useState<string>('all');
   const [skin, setSkin] = useState<'ticket' | 'basic'>('ticket');
   const [q, setQ] = useState('');
   // 모바일은 티켓 스킨 대신 항상 기본형 리스트 — 좁은 폭에서 티켓이 뭉개지지 않게 (v1.9 사용자 확정)
@@ -83,6 +87,7 @@ function TrpgPageInner() {
   const [addOpen, setAddOpen] = useState(false);
   const [nNo, setNNo] = useState('');          // № 자리 표시 텍스트 — 비우면 자동 № 0XX
   const [nSlug, setNSlug] = useState('');      // 페이지 주소 별명 — /trpg/{별명} (커플홈 사용자 요청) · 비우면 자동(id)
+  const [nTags, setNTags] = useState<string[]>([]);   // 태그 (커플홈)
   const [nVis, setNVis] = useState<'public' | 'member' | 'private'>('public'); // 접근권한
   const [nListHidden, setNListHidden] = useState(false);   // 목록 표시 여부 (v2.0 — 접근권한과 별개)
   const [nPw, setNPw] = useState('');          // 열람 비밀번호 (선택)
@@ -96,7 +101,7 @@ function TrpgPageInner() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const r = q.get('rel');
-    if (r) setFilter(q.get('au') ? `${r}:${q.get('au')}` : r);
+    if (r) setRelFilter(q.get('au') ? `${r}:${q.get('au')}` : r);
   }, []);
   const [nDate, setNDate] = useState('');
   const [nMode, setNMode] = useState<'file' | 'paste'>('paste');
@@ -123,12 +128,19 @@ function TrpgPageInner() {
   const [nC2, setNC2] = useState('#242b36');
   const thumbRef = useRef<HTMLInputElement>(null);
 
-  const counts = useMemo(() => {
+  // 태그마다 몇 개인지 (이 섹션) — 옆 목록은 많이 쓰인 순
+  const tagCounts = useMemo(() => {
     const m: Record<string, number> = {};
-    // 자관 원본은 자관 id, AU 로그는 「자관 id:AU id」로 따로 센다 (커플홈)
-    logs.forEach(l => { const k = l.relId ? (l.auId ? `${l.relId}:${l.auId}` : l.relId) : 'none'; m[k] = (m[k] ?? 0) + 1; });
+    logs.forEach(l => (l.tags ?? []).forEach(t => { m[t] = (m[t] ?? 0) + 1; }));
     return m;
   }, [logs]);
+  const tagList = useMemo(() => Object.entries(tagCounts).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t), [tagCounts]);
+  // 자동완성 후보 — 모든 섹션의 로그 태그 (많이 쓰인 순)
+  const allTags = useMemo(() => {
+    const m: Record<string, number> = {};
+    logsAll.forEach(l => (l.tags ?? []).forEach(t => { m[t] = (m[t] ?? 0) + 1; }));
+    return Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
+  }, [logsAll]);
 
   // 목록에 뜰지는 오직 listHidden — 접근권한(visibility)은 "누가 열 수 있는지"만 정하고
   // 목록에 나오는지는 정하지 않는다 (v2.0 사용자 확정: "나만보기여도 목록에는 표시돼야해").
@@ -139,9 +151,10 @@ function TrpgPageInner() {
     // 목록 숨김 — 관리자도 편집모드가 아니면 안 보인다(목록을 정리해 두는 용도라, v2.0 사용자 요청).
     // 편집모드에서는 관리자에게만 예외로 보여 되돌릴 수 있게 한다
     .filter(l => !l.listHidden || (isAdmin && editOn))
-    .filter(l => filter === 'all' || (filter === 'none' ? !l.relId
-      : filter.includes(':') ? `${l.relId}:${l.auId}` === filter : (l.relId === filter && !l.auId)))
-    .filter(l => !q || l.title.includes(q) || l.writer.includes(q) || l.withText.includes(q));
+    .filter(l => relFilter === 'all' || (relFilter.includes(':') ? `${l.relId}:${l.auId}` === relFilter : (l.relId === relFilter && !l.auId)))
+    .filter(l => tagFilter === 'all' || (l.tags ?? []).includes(tagFilter))
+    .filter(l => !q || l.title.includes(q) || l.writer.includes(q) || l.withText.includes(q)
+      || (l.tags ?? []).some(t => t.toLowerCase().includes(q.toLowerCase())));   // 태그 검색
   // 정렬 기준은 저장된 순서 — 편집모드에서 드래그로 바꾼 순서가 그대로 목록에 반영된다 (v2.0).
   // 새 로그는 앞에 넣으므로 기본은 지금까지처럼 최신순이고, № 번호는 표시용으로만 남는다.
 
@@ -169,7 +182,7 @@ function TrpgPageInner() {
   const logCur = Math.min(logPage, logPages);        // 필터로 줄어 페이지가 사라지면 마지막으로 당긴다
   const logStart = (logCur - 1) * PER_LOG;
   // 필터·검색·보기 방식을 바꾸면 1페이지부터
-  useEffect(() => { setLogPage(1); }, [filter, q, ticketView]);
+  useEffect(() => { setLogPage(1); }, [tagFilter, relFilter, q, ticketView]);
   const pageLogs = visible.slice(logStart, logStart + PER_LOG);
 
   /** 이 페이지 안에서 바뀐 순서를 전체 순서에 되꽂는다 —
@@ -273,6 +286,7 @@ function TrpgPageInner() {
       no: Math.max(0, ...logs.map(l => l.no)) + 1, // 내부 순번 (정렬용)
       noText: nNo.trim() || undefined,             // № 자리 표시 텍스트 — 비우면 자동 № 0XX
       slug: slug || undefined,                      // 페이지 주소 별명 (커플홈)
+      tags: nTags.length ? nTags : undefined,       // 태그 (커플홈)
       title: dcMode ? dcTitle : nTitle.trim(), catchphrase: nCatch.trim() || undefined,
       writer: nWriter.trim(), withText: nWith.trim() || dcWith,
       relId, auId,
@@ -313,7 +327,7 @@ function TrpgPageInner() {
     // 본문은 id로만 찾으므로 순서는 아무 의미가 없다.
     setBodies([...bodies, body]);
     setAddOpen(false);
-    setNNo(''); setNSlug(''); setNVis('public'); setNPw(''); setNListHidden(false); setNTitle(''); setNCatch(''); setNWriter(''); setNWith(''); setNBody(''); setNFileName(''); setNDate(''); setNFile(null);
+    setNNo(''); setNSlug(''); setNTags([]); setNVis('public'); setNPw(''); setNListHidden(false); setNTitle(''); setNCatch(''); setNWriter(''); setNWith(''); setNBody(''); setNFileName(''); setNDate(''); setNFile(null);
     setNThumb(null); setNThumbUrl(''); setNThumbCrop(undefined);
     setDc(DC_DEFAULT);
     toast(dcMode
@@ -347,6 +361,7 @@ function TrpgPageInner() {
         {/* 편집모드에서만 — 지금 목록 숨김이라 관리자에게만 예외로 보이는 중임을 표시 (v2.0) */}
         {editOn && l.listHidden && <span className="pill" style={{ marginTop: 4 }}>숨김</span>}
         {l.catchphrase && <div className="sc-catch">{l.catchphrase}</div>}
+        {!!l.tags?.length && <div className="row"><b>태그</b> {l.tags.map(t => `#${t}`).join(' ')}</div>}
         {/* 나만보기 등도 이제 목록엔 뜨므로(v2.0), 못 여는 로그는 왜 못 여는지 표시 */}
         {!canOpen(l) && (
           <div className="row"><b>열람</b> {l.password ? '비밀번호 필요' : '권한 없음'}</div>
@@ -371,6 +386,19 @@ function TrpgPageInner() {
       </div>
       <div className="trpg-layout">
         <div>
+          {/* 자관 페이지의 「로그 더보기」로 들어온 자관(·AU) 필터 — 알약을 누르면 푼다 (사이드의 자관 필터는 없앴다) */}
+          {relFilter !== 'all' && (() => {
+            const [rid, aid] = relFilter.split(':');
+            const r = rels.find(x => x.id === rid);
+            const au = aid ? r?.aus.find(a => a.id === aid) : undefined;
+            return (
+              <div style={{ marginBottom: 10 }}>
+                <span className="pill" style={{ cursor: 'var(--cur-pointer,pointer)' }} onClick={() => setRelFilter('all')}>
+                  {r ? (au ? `${r.name} · ${au.label || 'AU'}` : r.name) : '자관'} 로그만 보는 중 ✕
+                </span>
+              </div>
+            );
+          })()}
           {ticketView
             ? (
               // 다른 목록형 페이지와 같은 DragList — 손잡이를 들어 부드럽게 밀어내고 놓으면 안착 (v2.0)
@@ -399,7 +427,7 @@ function TrpgPageInner() {
                       {editOn && l.listHidden && <span className="pill" style={{ marginLeft: 6 }}>숨김</span>}
                       {/* 나만보기 등도 목록엔 뜨므로(v2.0) — 못 여는 로그는 왜 못 여는지 표시 */}
                       {!canOpen(l) && <span className="pill" style={{ marginLeft: 6 }}>{l.password ? '비밀번호 필요' : '비공개'}</span>}
-                      <small>{[l.writer, l.withText].filter(Boolean).join(' · ')}{l.date ? ` · ${l.date.replace(/-/g, '.')}` : ''}</small>
+                      <small>{[l.writer, l.withText].filter(Boolean).join(' · ')}{l.date ? ` · ${l.date.replace(/-/g, '.')}` : ''}{l.tags?.length ? ` · ${l.tags.map(t => '#' + t).join(' ')}` : ''}</small>
                     </div>
                   </div>
                 ))}
@@ -424,32 +452,18 @@ function TrpgPageInner() {
               onApply={applyOrder} onClose={() => setOrdFor(null)} />
           )}
         </div>
-        {/* 자관 연동 필터 (v1.2) */}
+        {/* 태그 필터 (커플홈 사용자 요청 — 자관이 하나뿐이라 자관 필터 대신) */}
         <div className="panel tagside">
-          <h4>자관 필터</h4>
-          <div className={`tag ${filter === 'all' ? 'on' : ''}`} onClick={() => setFilter('all')}>
+          <h4>태그</h4>
+          <div className={`tag ${tagFilter === 'all' ? 'on' : ''}`} onClick={() => setTagFilter('all')}>
             전체 <small>{logs.length}</small>
           </div>
-          {/* 자관마다 원본 / AU를 따로 (커플홈 사용자 요청 — AU 역극의 로그가 원본 목록에 섞였다) */}
-          {rels.filter(r => counts[r.id] || r.aus.some(a => counts[`${r.id}:${a.id}`])).map(r => (
-            <Fragment key={r.id}>
-              {counts[r.id] > 0 && (
-                <div className={`tag ${filter === r.id ? 'on' : ''}`} onClick={() => setFilter(r.id)}>
-                  {r.name} <small>{counts[r.id]}</small>
-                </div>
-              )}
-              {r.aus.filter(a => a.id !== 'base' && counts[`${r.id}:${a.id}`]).map(a => (
-                <div key={a.id} className={`tag ${filter === `${r.id}:${a.id}` ? 'on' : ''}`} onClick={() => setFilter(`${r.id}:${a.id}`)}>
-                  {r.name} · {a.label || 'AU'} <small>{counts[`${r.id}:${a.id}`]}</small>
-                </div>
-              ))}
-            </Fragment>
-          ))}
-          {counts['none'] > 0 && (
-            <div className={`tag ${filter === 'none' ? 'on' : ''}`} onClick={() => setFilter('none')}>
-              단발 <small>{counts['none']}</small>
+          {tagList.map(t => (
+            <div key={t} className={`tag ${tagFilter === t ? 'on' : ''}`} onClick={() => setTagFilter(tagFilter === t ? 'all' : t)}>
+              #{t} <small>{tagCounts[t]}</small>
             </div>
-          )}
+          ))}
+          {tagList.length === 0 && <small className="hint" style={{ display: 'block', margin: '2px 0 0' }}>로그에 태그를 달면 여기서 거를 수 있습니다</small>}
           {/* 모바일은 항상 기본형 — 스킨 선택 숨김 (v1.9) */}
           {!isMobile && (
             <>
@@ -482,6 +496,8 @@ function TrpgPageInner() {
             <KInput placeholder="페이지 주소 (선택) — /trpg/여기" value={nSlug} onChange={e => setNSlug(slugify(e.target.value))}
               style={{ maxWidth: 220 }} />
           </div>
+          {/* 태그 (커플홈 사용자 요청) — 기존 태그는 입력 중 아래에 자동완성 */}
+          <TagInput value={nTags} onChange={setNTags} suggestions={allTags} placeholder="태그 (Enter로 추가 · 기존 태그는 아래에 자동완성)" />
           <div style={{ display: 'flex', gap: 8 }}>
             <KInput placeholder="라이터 (선택)" value={nWriter} onChange={e => setNWriter(e.target.value)} />
             <KInput placeholder="같이 간 사람 (선택)" value={nWith} onChange={e => setNWith(e.target.value)} />

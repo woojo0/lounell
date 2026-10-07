@@ -17,6 +17,7 @@ import { useMembers } from '@/lib/members';
 import { canEditTrpg, trpgEditorIds } from '@/lib/trpgPerm';
 import { logViewChars, renderLogSrc } from '@/lib/rpLogSrc';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
+import { TagInput } from '@/components/ui/TagInput';
 import { getBlob, putBlob, useBlobUrl } from '@/lib/blobStore';
 import { PageTitle, EditableDesc } from '@/components/ui/PageText';
 import { KInput, KSelect, KDate, KTextarea, KCheck } from '@/components/ui/Kit';
@@ -63,6 +64,12 @@ export default function TrpgDetailPage() {
   // 수정 권한 (커플홈 사용자 요청 — "수정 권한은 멤버에게도"): 관리자 · 등록한 본인 · 등록 권한이 있는 회원(editorIds, trpgPerm.ts)
   const [menuSet] = useMenuSettings();
   const members = useMembers();
+  // 태그 자동완성 후보 — 모든 로그의 태그, 많이 쓰인 순 (커플홈)
+  const allTags = useMemo(() => {
+    const m: Record<string, number> = {};
+    logs.forEach(x => (x.tags ?? []).forEach(t => { m[t] = (m[t] ?? 0) + 1; }));
+    return Object.entries(m).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t);
+  }, [logs]);
   const [delAsk, setDelAsk] = useState(false);
   const [bodyText, setBodyText] = useState<string | null>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -121,7 +128,7 @@ export default function TrpgDetailPage() {
   // 로그 정보 수정 — 메타 + 본문 교체(파일/직접 입력) + 썸네일 교체(이미지 크롭/단색·그라데이션)
   const [eOpen, setEOpen] = useState(false);
   const [e, setE] = useState({
-    noText: '', slug: '', title: '', catchphrase: '', writer: '', withText: '',
+    noText: '', slug: '', tags: [] as string[], title: '', catchphrase: '', writer: '', withText: '',
     relId: 'none', auId: 'base', date: '', visibility: 'public' as TrpgLog['visibility'], password: '',
     listHidden: false,   // 목록 표시 여부 (v2.0 — 접근권한과 별개)
   });
@@ -291,6 +298,7 @@ export default function TrpgDetailPage() {
       ...(l as TrpgLog),
       noText: e.noText.trim() || undefined,
       slug: slug || undefined,
+      tags: e.tags.length ? e.tags : undefined,   // 태그 (커플홈)
       title: e.title.trim(), catchphrase: e.catchphrase.trim() || undefined,
       writer: e.writer.trim(), withText: e.withText.trim(),
       relId: e.relId === 'none' ? undefined : e.relId,
@@ -531,7 +539,7 @@ if(!on){hide();if(tools&&tools.parentNode)tools.parentNode.removeChild(tools)}}}
     <section className="page">
       <div className="page-head">
         <PageTitle href={tt.href}>{tt.title}</PageTitle>
-        <p>{logNo(l)}{[l.writer, l.withText].filter(Boolean).map(x => ` · ${x}`).join('')}{l.date ? ` · ${l.date.replace(/-/g, '.')}` : ''}</p>
+        <p>{logNo(l)}{[l.writer, l.withText].filter(Boolean).map(x => ` · ${x}`).join('')}{l.date ? ` · ${l.date.replace(/-/g, '.')}` : ''}{l.tags?.length ? ` · ${l.tags.map(t => '#' + t).join(' ')}` : ''}</p>
         <div className="head-actions">
           {/* AU 로그면 AU 이름까지, 누르면 그 AU 페이지로 (커플홈) */}
           {rel && (() => {
@@ -543,7 +551,7 @@ if(!on){hide();if(tools&&tools.parentNode)tools.parentNode.removeChild(tools)}}}
           {canEdit && <button className={`btn ${editing ? 'btn-dark' : 'btn-ghost'}`} onClick={toggleEdit}>{editing ? '편집 끝' : '편집모드'}</button>}
           {canEdit && <button className="btn btn-dark" onClick={() => {
             setE({
-              noText: l.noText ?? '', slug: l.slug ?? '', title: l.title, catchphrase: l.catchphrase ?? '', writer: l.writer,
+              noText: l.noText ?? '', slug: l.slug ?? '', tags: l.tags ?? [], title: l.title, catchphrase: l.catchphrase ?? '', writer: l.writer,
               withText: l.withText, relId: l.relId ?? 'none', auId: l.auId ?? 'base', date: l.date ?? '',
               visibility: l.visibility, password: l.password ?? '', listHidden: !!l.listHidden,
             });
@@ -666,6 +674,8 @@ if(!on){hide();if(tools&&tools.parentNode)tools.parentNode.removeChild(tools)}}}
             <KInput placeholder={`페이지 주소 (비우면 ${l.id})`} value={e.slug} onChange={ev => setE(s => ({ ...s, slug: slugify(ev.target.value) }))}
               style={{ maxWidth: 220 }} />
           </div>
+          {/* 태그 (커플홈) — 다른 로그의 태그가 입력 중 아래에 자동완성 */}
+          <TagInput value={e.tags} onChange={v => setE(s => ({ ...s, tags: v }))} suggestions={allTags} placeholder="태그 (Enter로 추가 · 기존 태그는 아래에 자동완성)" />
           <div style={{ display: 'flex', gap: 8 }}>
             <KInput placeholder="라이터 (선택)" value={e.writer} onChange={ev => setE(s => ({ ...s, writer: ev.target.value }))} />
             <KInput placeholder="같이 간 사람 (선택)" value={e.withText} onChange={ev => setE(s => ({ ...s, withText: ev.target.value }))} />

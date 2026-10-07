@@ -1755,6 +1755,16 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 /* RP LOG 편집모드 — 원본 발화가 없는 로그의 본문 글 편집 칸 (발화 단위 편집은 프레임 안 도구로, trpg/[id]) */
 .lsrc-wrap{display:grid;gap:12px}
 .lsrc-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+/* 태그 입력칸 (커플홈 — RP LOG 태그): 칩 + 입력 + 자동완성 목록 (components/ui/TagInput) */
+.tagin{position:relative;display:flex;flex-wrap:wrap;gap:6px;align-items:center;min-height:38px;padding:5px 8px;background:#fff;border:1.5px solid var(--line);border-radius:var(--radius-s);cursor:text;transition:.18s}
+.tagin:focus-within{border-color:var(--focus-bd,var(--steel-3));box-shadow:var(--focus-ring,0 0 0 3px rgba(60,67,77,.12))}
+.tagin-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:14px;font-size:calc(11.5px*var(--fs,1));background:color-mix(in srgb,var(--accent) 9%,#fff);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 25%,transparent)}
+.tagin-chip button{border:0;background:transparent;color:inherit;cursor:var(--cur-pointer,pointer);font-size:13px;line-height:1;padding:0 1px;opacity:.7}
+.tagin-chip button:hover{opacity:1}
+.tagin-in{flex:1;min-width:120px;border:0;outline:none;background:transparent;font-size:calc(13px*var(--fs,1));color:var(--ink);padding:3px 2px}
+.tagin-list{position:absolute;left:0;top:calc(100% + 4px);z-index:30;min-width:200px;max-width:100%;display:flex;flex-direction:column;background:#fff;border:1px solid var(--line);border-radius:9px;padding:4px;box-shadow:var(--sh-md);max-height:220px;overflow:auto}
+.tagin-list button{text-align:left;border:0;background:transparent;padding:7px 10px;border-radius:6px;font-size:calc(12.5px*var(--fs,1));color:var(--ink);cursor:var(--cur-pointer,pointer)}
+.tagin-list button:hover,.tagin-list button.on{background:color-mix(in srgb,var(--accent) 9%,#fff);color:var(--accent)}
 
 /* ---------- 게시판 공통 (4.2) ---------- */
 .toolrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap}

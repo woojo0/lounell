@@ -9,8 +9,8 @@ import { useMenuSettings } from '@/lib/menuStore';
 import { useMembers } from '@/lib/members';
 import { canAddTrpg, trpgEditorIds, sameIds } from '@/lib/trpgPerm';
 import { useLocalList, newId } from '@/lib/postStore';
-import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, decodeLogText, logNo, saveLogBody } from '@/lib/galleryStore';
-import { Relation, REL_SEED } from '@/lib/charStore';
+import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, decodeLogText, logNo, saveLogBody, isHtmlBody } from '@/lib/galleryStore';
+import { Relation, REL_SEED, Character, CHAR_SEED } from '@/lib/charStore';
 import { SearchBar, KInput, KTextarea, KRadio, KSelect, KDate, Pager } from '@/components/ui/Kit';
 import { Modal } from '@/components/ui/Modal';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
@@ -24,7 +24,10 @@ import { useMainStore } from '@/lib/mainStore';
 import { mergeOrder } from '@/lib/cardSort';
 import { DragList } from '@/components/ui/DragList';
 import { OrderMenu, orderNoOf, moveToOrder } from '@/components/ui/OrderMenu';
-import { DiscordImportModal } from '@/components/rp/DiscordImport';
+import { DiscordPanel, DC_DEFAULT, dcUnmapped, type DcOptions } from '@/components/rp/DiscordPanel';
+import { parseDiscordLog, dcToMessages } from '@/lib/discordLog';
+import { rpLogLastDate, rpLogSrcFits, type RpLogSrc } from '@/lib/rpLog';
+import { renderLogSrc, logViewChars } from '@/lib/rpLogSrc';
 
 function TrpgPageInner() {
   const router = useRouter();
@@ -41,6 +44,7 @@ function TrpgPageInner() {
   // listHidden으로 느슨해졌는데, 본문까지 같이 있으면 그 질의로 본문도 함께 새어 나간다
   const [bodies, setBodies, bodiesLoaded] = useLocalList<TrpgLogBody>('ohome.trpgbody.v1', TRPG_BODY_SEED);
   const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
+  const [chars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);   // 디스코드 복사본의 발화자 매칭용
   // 등록 권한 (커플홈 사용자 요청 — "등록 권한은 멤버에게도"): 환경설정 > 권한의 RP LOG 「등록」(기본 가입자)
   const [menuSet, , menuLoaded] = useMenuSettings();
   const members = useMembers();
@@ -63,7 +67,6 @@ function TrpgPageInner() {
   }, [isAdmin, user, logsLoaded, bodiesLoaded, menuLoaded, members, menuSet, logsAll, bodies, setLogsAll, setBodies]);
   const { editOn } = useMainStore();          // 편집모드 — 상단바 토글 (다른 목록과 공통)
   const [filter, setFilter] = useState<string>('all');
-  const [dcOpen, setDcOpen] = useState(false);   // 디스코드 가져오기 모달 (커플홈)
   const [skin, setSkin] = useState<'ticket' | 'basic'>('ticket');
   const [q, setQ] = useState('');
   // 모바일은 티켓 스킨 대신 항상 기본형 리스트 — 좁은 폭에서 티켓이 뭉개지지 않게 (v1.9 사용자 확정)
@@ -98,6 +101,15 @@ function TrpgPageInner() {
   const [nBody, setNBody] = useState('');
   const [nFileName, setNFileName] = useState('');
   const [nFile, setNFile] = useState<File | null>(null);
+  /* 디스코드 복사본 자동 판별 (커플홈 사용자 요청 — 따로 「가져오기」 버튼 없이 붙여넣기·직접 작성·파일 첨부에서 알아서):
+     본문 글이 HTML이 아니고 parseDiscordLog가 발화를 찾으면 변환 패널을 띄운다. 판별이 틀렸으면 패널에서 「글 그대로」 */
+  const dcParsed = useMemo(() => (nBody.trim() && !isHtmlBody(nBody) ? parseDiscordLog(nBody) : null), [nBody]);
+  const isDc = !!dcParsed && dcParsed.messages.length > 0;
+  const [dc, setDc] = useState<DcOptions>(DC_DEFAULT);
+  // 매칭 목록 — 위에서 고른 자관(·AU)의 캐릭터가 먼저 (AU면 그 모습·이름)
+  const dcChars = useMemo(
+    () => logViewChars(chars, rels, nRel === 'none' ? undefined : nRel, nAu !== 'base' ? nAu : undefined),
+    [chars, rels, nRel, nAu]);
   const fileRef = useRef<HTMLInputElement>(null);
   // 썸네일 (선택) — 이미지 또는 단색/그라데이션 (v1.9 사용자 요청)
   const [nThumb, setNThumb] = useState<File | null>(null);
@@ -219,26 +231,51 @@ function TrpgPageInner() {
   };
 
   const add = async () => {
-    if (!nTitle.trim()) { toast('시나리오 타이틀을 입력해 주세요'); return; }
+    const dcMode = isDc && dc.convert;   // 디스코드 복사본 → 역극 로그 (타이틀은 비워도 된다 — 「자관 이름 로그」)
+    if (!nTitle.trim() && !dcMode) { toast('시나리오 타이틀을 입력해 주세요'); return; }
     const id = newId();
     // 파일이 있으면 등록 시점에 직접 읽음 — 읽기 완료 전에 ADD를 눌러도 본문이 비지 않음
-    const bodyText = nFile ? await decodeText(nFile) : nBody;
+    const rawText = nFile ? await decodeText(nFile) : nBody;
+    const relId = nRel === 'none' ? undefined : nRel;
+    const auId = relId && nAu !== 'base' ? nAu : undefined;   // 그 자관의 AU (커플홈)
+    // 디스코드 복사본이면 매칭대로 발화를 만들어 역극 모양으로 그린다 — 원본 발화(src)도 남겨 「본문 편집」이 되게.
+    // 시각은 어디에도 남기지 않는다 — 이름과 내용만 (사용자 확정)
+    let bodyText = rawText;
+    let src: RpLogSrc | undefined;
+    let dcTitle = '', dcWith = '', dcDate = '', dcColors: string[] = [];
+    if (dcMode) {
+      const parsed = parseDiscordLog(rawText);
+      const unmapped = dcUnmapped(parsed, dc.map);
+      if (unmapped.length) { toast(`아직 정하지 않은 발화자가 있습니다: ${unmapped.map(s => s.name).join(', ')}`); return; }
+      const msgs = dcToMessages(parsed, dc.map);
+      if (!msgs.length) { toast('넣을 발화가 없습니다 — 발화자를 전부 제외하지는 않았는지 확인해 주세요'); return; }
+      src = { msgs, style: dc.style, fmt: dc.fmt, faces: dc.faces, time: false, noMeta: true };
+      dcTitle = nTitle.trim() || `${rels.find(r => r.id === relId)?.name ?? '역극'} 로그`;
+      const r = await renderLogSrc(src, dcTitle, chars, rels, relId, auId);
+      bodyText = r.bodyText;
+      dcWith = r.withText;
+      dcDate = rpLogLastDate(msgs);
+      dcColors = r.speakers.map(c => c.color).filter(c => /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(c));
+    }
+    // 색을 손대지 않았고 이미지도 없으면 말한 캐릭터들의 테마색으로 (디스코드 변환일 때)
+    const defaultColor = nColorMode === 'grad' && nC1 === '#4c5a6e' && nC2 === '#242b36';
     const log: TrpgLog = {
       id,
       no: Math.max(0, ...logs.map(l => l.no)) + 1, // 내부 순번 (정렬용)
       noText: nNo.trim() || undefined,             // № 자리 표시 텍스트 — 비우면 자동 № 0XX
-      title: nTitle.trim(), catchphrase: nCatch.trim() || undefined,
-      writer: nWriter.trim(), withText: nWith.trim(),
-      relId: nRel === 'none' ? undefined : nRel,
-      auId: nRel !== 'none' && nAu !== 'base' ? nAu : undefined,   // 그 자관의 AU (커플홈)
-      date: nDate || undefined, ph: 'cool',
+      title: dcMode ? dcTitle : nTitle.trim(), catchphrase: nCatch.trim() || undefined,
+      writer: nWriter.trim(), withText: nWith.trim() || dcWith,
+      relId, auId,
+      date: nDate || dcDate || undefined, ph: 'cool',
       visibility: nVis,
       password: nPw.trim() || undefined,
       listHidden: nListHidden,
       // 썸네일: 이미지(선택) 또는 단색/그라데이션
       thumbId: nThumb ? await putBlob(nThumb) : undefined,
       thumbCrop: nThumb ? nThumbCrop : undefined,
-      thumbColor: nThumb ? undefined : { c1: nC1, c2: nColorMode === 'grad' ? nC2 : undefined },
+      thumbColor: nThumb ? undefined
+        : dcMode && defaultColor && dcColors.length ? { c1: dcColors[0], c2: dcColors[1] }
+        : { c1: nC1, c2: nColorMode === 'grad' ? nC2 : undefined },
       // 등록자 · 수정 가능 회원(등록 권한이 있는 회원 전원 — trpgPerm.ts)
       authorId: user?.id,
       editorIds: trpgEditorIds(menuSet, sec.id, members),
@@ -249,6 +286,9 @@ function TrpgPageInner() {
       id,
       // 본문 저장 위치는 saveLogBody가 정한다 (서버면 문서에 직접 · 로컬이거나 아주 크면 파일로)
       ...(await saveLogBody(bodyText)),
+      // 디스코드 변환이면 표시 방식을 못 박고 원본 발화를 남긴다 (문서 상한 안쪽일 때)
+      bodyHtml: src ? src.fmt === 'html' : undefined,
+      src: src && rpLogSrcFits(src) ? src : undefined,
       // 업로드 원본 파일은 그대로 보관 (4.3 — 백업 목적, IndexedDB → R2 이전 예정)
       originalFileId: nFile ? await putBlob(nFile) : undefined,
       originalName: nFile?.name,
@@ -265,7 +305,10 @@ function TrpgPageInner() {
     setAddOpen(false);
     setNNo(''); setNVis('public'); setNPw(''); setNListHidden(false); setNTitle(''); setNCatch(''); setNWriter(''); setNWith(''); setNBody(''); setNFileName(''); setNDate(''); setNFile(null);
     setNThumb(null); setNThumbUrl(''); setNThumbCrop(undefined);
-    toast(nFile ? '로그가 등록되었습니다 — 원본 파일도 보관됩니다' : '로그가 등록되었습니다');
+    setDc(DC_DEFAULT);
+    toast(dcMode
+      ? `디스코드 로그를 역극 모양으로 등록했습니다${nFile ? ' — 원본 파일도 보관됩니다' : ''}`
+      : nFile ? '로그가 등록되었습니다 — 원본 파일도 보관됩니다' : '로그가 등록되었습니다');
   };
 
   // 티켓 썸네일 — 업로드 이미지 > 지정 색(단색/그라데이션) > 데모 ph
@@ -313,8 +356,6 @@ function TrpgPageInner() {
         <EditableDesc k="trpg-desc" def="티켓형 스킨 · 시나리오 타이틀 폰트 개별 설정 · 우측 자관 뱃지로 필터" />
         <div className="head-actions">
           <SearchBar onSearch={setQ} />
-          {/* 디스코드 복사본 가져오기 (커플홈 사용자 요청) — 붙여 넣기/txt → 발화자 매칭 → 역극 모양 로그 */}
-          {canAdd && <button className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => setDcOpen(true)}>디스코드 가져오기</button>}
           {canAdd && <button className="btn btn-dark" style={{ whiteSpace: 'nowrap' }} onClick={() => setAddOpen(true)}>＋ ADD LOG</button>}
         </div>
       </div>
@@ -411,10 +452,9 @@ function TrpgPageInner() {
         </div>
       </div>
 
-      {dcOpen && <DiscordImportModal onClose={() => setDcOpen(false)} initialSecId={sec.id} />}
       {/* ＋ ADD LOG (4.3 — 본문 입력 3방식) */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="로그 등록"
-        desc="본문: 파일 업로드(.txt/.html — 내용 자동 판별) 또는 붙여넣기/직접 작성"
+        desc="본문: 파일 업로드(.txt/.html — 내용 자동 판별) 또는 붙여넣기/직접 작성 · 디스코드 복사본(붙여 넣기·txt)은 알아서 역극 로그로"
         actions={<>
           <button className="btn btn-ghost" onClick={() => setAddOpen(false)}>CANCEL</button>
           <button className="btn btn-dark" onClick={add}>ADD</button>
@@ -521,13 +561,15 @@ function TrpgPageInner() {
                 onDrop={e => { e.preventDefault(); readFile(e.dataTransfer.files?.[0]); }}>
                 {nFileName
                   ? <b>{nFileName} — 읽기 완료 ({nBody.length.toLocaleString()}자)</b>
-                  : <><b style={{ display: 'block', marginBottom: 3 }}>.txt / .html 파일을 끌어다 놓거나 클릭</b>크리스탈리아 등 로그 툴 내보내기 파일 그대로 — 내용 자동 판별</>}
+                  : <><b style={{ display: 'block', marginBottom: 3 }}>.txt / .html 파일을 끌어다 놓거나 클릭</b>크리스탈리아 등 로그 툴 내보내기 파일·디스코드 복사본 txt 그대로 — 내용 자동 판별</>}
               </div>
             </>
           ) : (
             <KTextarea style={{ minHeight: 120, fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 12 }}
-              placeholder="HTML 코드 통째 붙여넣기 또는 텍스트 직접 작성" value={nBody} onChange={e => setNBody(e.target.value)} />
+              placeholder="HTML 코드 통째 붙여넣기 · 텍스트 직접 작성 · 디스코드 복사본 붙여넣기(알아서 역극 로그로)" value={nBody} onChange={e => setNBody(e.target.value)} />
           )}
+          {/* 디스코드 복사본이면 변환 패널 (커플홈 사용자 요청 — 따로 버튼 없이) — 발화자 매칭·모양. 「글 그대로」로 끄면 평범한 본문으로 저장 */}
+          {isDc && dcParsed && <DiscordPanel parsed={dcParsed} relChars={dcChars.members} others={dcChars.others} value={dc} onChange={setDc} />}
         </div>
       </Modal>
 

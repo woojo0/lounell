@@ -126,7 +126,8 @@ function imsgRows(msgs: RpMessage[], chars: Character[], opts: RpLogOpts): strin
     const nameNeeded = !prev || prev.kind !== 'char' || prev.charId !== m.charId;
     const short = m.text.trim().length > 0 && m.text.trim().length <= 3;
     const side = opts.neutralSides ? '' : (me ? ' me' : ' them');
-    // 얼굴은 사진 옵션을 켰을 때만 — 상대 쪽 묶음 끝에 하나 (내 쪽·중간은 CSS가 숨긴다). 좌우를 안 정한 본문은 전부 적어 둔다
+    // 얼굴은 사진 옵션을 켰을 때만 — 양쪽 다, 같은 캐릭터 묶음의 끝에 하나 (중간은 CSS가 자리만 두고 숨긴다).
+    // 사용자 확정: 전체보기·로그에서는 서로의 프로필 사진이 다 보여야 한다 (내 쪽은 말풍선 오른쪽에)
     const f = opts.faces?.[m.charId ?? ''];
     const face = opts.faces ? `<span class="f">${f ? `<img src="${esc(f.url)}" style="${esc(f.style)}" alt="">` : ''}</span>` : '';
     const nm = nameNeeded && (opts.neutralSides || !me) ? `<div class="n">${esc(nameOf(chars, m.charId))}</div>` : '';
@@ -156,7 +157,6 @@ body{margin:0;background:#f2f2f7;color:#111;font-family:-apple-system,'Pretendar
 .b.me .n{display:none}
 .f{width:26px;height:26px;border-radius:50%;overflow:hidden;position:relative;flex-shrink:0;align-self:flex-end;background:#d8d8dc}
 .b:not(.last) .f{visibility:hidden}
-.b.me .f{display:none}
 .f img{display:block}
 .bub{position:relative;padding:7px 12px;border-radius:18px;font-size:13px;line-height:1.45;white-space:pre-wrap;word-break:break-word;background:#e9e9eb;color:#000;max-width:100%;min-width:37px}
 .b.me .bub{background:#0b84ff;color:#fff}

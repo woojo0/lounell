@@ -24,7 +24,7 @@ import { useMainStore } from '@/lib/mainStore';
 import { mergeOrder } from '@/lib/cardSort';
 import { DragList } from '@/components/ui/DragList';
 import { OrderMenu, orderNoOf, moveToOrder } from '@/components/ui/OrderMenu';
-import { DiscordPanel, DC_DEFAULT, dcUnmapped, type DcOptions } from '@/components/rp/DiscordPanel';
+import { DiscordPanel, DC_DEFAULT, dcUnmapped, dcReady, type DcOptions } from '@/components/rp/DiscordPanel';
 import { parseDiscordLog, dcToMessages } from '@/lib/discordLog';
 import { rpLogLastDate, rpLogSrcFits, type RpLogSrc } from '@/lib/rpLog';
 import { renderLogSrc, logViewChars } from '@/lib/rpLogSrc';
@@ -233,6 +233,7 @@ function TrpgPageInner() {
   const add = async () => {
     const dcMode = isDc && dc.convert;   // 디스코드 복사본 → 역극 로그 (타이틀은 비워도 된다 — 「자관 이름 로그」)
     if (!nTitle.trim() && !dcMode) { toast('시나리오 타이틀을 입력해 주세요'); return; }
+    if (dcMode && !dcReady(rels, nRel, dc)) { toast('자관의 AU(또는 원본 설정)를 먼저 골라 주세요'); return; }
     const id = newId();
     // 파일이 있으면 등록 시점에 직접 읽음 — 읽기 완료 전에 ADD를 눌러도 본문이 비지 않음
     const rawText = nFile ? await decodeText(nFile) : nBody;
@@ -472,16 +473,21 @@ function TrpgPageInner() {
             <KInput placeholder="같이 간 사람 (선택)" value={nWith} onChange={e => setNWith(e.target.value)} />
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <KSelect minWidth={140} value={nRel} onChange={v => { setNRel(v); setNAu('base'); }}
-              options={[{ value: 'none', label: '자관 연동 없음' }, ...rels.map(r => ({ value: r.id, label: r.name }))]} />
-            {/* 그 자관의 AU (커플홈) — AU가 있는 자관에서만 */}
-            {(() => {
-              const aus = rels.find(r => r.id === nRel)?.aus.filter(a => a.id !== 'base') ?? [];
-              return aus.length ? (
-                <KSelect minWidth={120} value={nAu} onChange={setNAu}
-                  options={[{ value: 'base', label: '원본 설정' }, ...aus.map(a => ({ value: a.id, label: a.label || 'AU' }))]} />
-              ) : null;
-            })()}
+            {/* 디스코드 변환 중에는 자관·AU를 아래 패널 ①에서 고른다 (사용자 요청: "AU부터 선택하고 캐릭터를") — 여기선 숨긴다 */}
+            {!(isDc && dc.convert) && (
+              <>
+                <KSelect minWidth={140} value={nRel} onChange={v => { setNRel(v); setNAu('base'); }}
+                  options={[{ value: 'none', label: '자관 연동 없음' }, ...rels.map(r => ({ value: r.id, label: r.name }))]} />
+                {/* 그 자관의 AU (커플홈) — AU가 있는 자관에서만 */}
+                {(() => {
+                  const aus = rels.find(r => r.id === nRel)?.aus.filter(a => a.id !== 'base') ?? [];
+                  return aus.length ? (
+                    <KSelect minWidth={120} value={nAu} onChange={setNAu}
+                      options={[{ value: 'base', label: '원본 설정' }, ...aus.map(a => ({ value: a.id, label: a.label || 'AU' }))]} />
+                  ) : null;
+                })()}
+              </>
+            )}
             <KDate value={nDate} onChange={setNDate} style={{ flex: 1 }} />
           </div>
           {/* 접근권한 + 열람 비밀번호 (선택) — 권한이 없어도 비밀번호를 아는 사람은 열람 가능.
@@ -569,7 +575,11 @@ function TrpgPageInner() {
               placeholder="HTML 코드 통째 붙여넣기 · 텍스트 직접 작성 · 디스코드 복사본 붙여넣기(알아서 역극 로그로)" value={nBody} onChange={e => setNBody(e.target.value)} />
           )}
           {/* 디스코드 복사본이면 변환 패널 (커플홈 사용자 요청 — 따로 버튼 없이) — 발화자 매칭·모양. 「글 그대로」로 끄면 평범한 본문으로 저장 */}
-          {isDc && dcParsed && <DiscordPanel parsed={dcParsed} relChars={dcChars.members} others={dcChars.others} value={dc} onChange={setDc} />}
+          {isDc && dcParsed && (
+            <DiscordPanel parsed={dcParsed} rels={rels} relId={nRel} auId={nAu}
+              onRel={v => { setNRel(v); setNAu('base'); }} onAu={setNAu}
+              relChars={dcChars.members} others={dcChars.others} value={dc} onChange={setDc} />
+          )}
         </div>
       </Modal>
 

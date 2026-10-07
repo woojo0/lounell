@@ -26,7 +26,7 @@ export async function renderLogSrc(
   const faceInfo: FaceInfo = Object.fromEntries(
     viewChars.map(c => [c.id, { ref: c.thumbId, crop: faceCropOf(c, rels, { relId: rel?.id, auKey }) }]),
   );
-  const faces = src.fmt === 'html' && src.style === 'imsg' && src.faces ? await resolveFaces(speakers, faceInfo) : undefined;
+  const faces = src.fmt === 'html' && src.faces ? await resolveFaces(speakers, faceInfo) : undefined;   // 메신저·대본 모두 (사용자 요청)
   const withText = speakers.map(c => c.name).join(' · ');
   const info = { title, sub: withText };
   const bodyText = src.fmt === 'html'

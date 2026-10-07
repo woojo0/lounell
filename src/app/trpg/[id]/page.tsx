@@ -18,7 +18,7 @@ import { LogSrcEditor } from '@/components/rp/LogSrcEditor';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { getBlob, putBlob, useBlobUrl } from '@/lib/blobStore';
 import { PageTitle, EditableDesc } from '@/components/ui/PageText';
-import { KInput, KSelect, KDate, KTextarea } from '@/components/ui/Kit';
+import { KInput, KSelect, KDate, KTextarea, KCheck } from '@/components/ui/Kit';
 import { ColorField } from '@/components/ui/ColorField';
 import { CropEditor, CropImg, CropValue } from '@/components/ui/CropEditor';
 import { useToast } from '@/components/ui/Toast';
@@ -133,6 +133,10 @@ export default function TrpgDetailPage() {
   const [eColorMode, setEColorMode] = useState<'grad' | 'solid'>('grad');
   const [eC1, setEC1] = useState('#4c5a6e');
   const [eC2, setEC2] = useState('#242b36');
+  // 모양 (원본 발화가 있는 역극 로그만) — EDIT에서 메신저/대본·HTML/텍스트·프로필 사진을 바꾸면 저장할 때 다시 그린다 (사용자 요청)
+  const [eStyle, setEStyle] = useState<'script' | 'imsg'>('imsg');
+  const [eFmt, setEFmt] = useState<'html' | 'text'>('html');
+  const [eFaces, setEFaces] = useState(true);
 
   // 본문 편집 모드 (커플홈 사용자 요청 — "등록한 다음에 편집모드를 켜서 내용도 수정") —
   // 원본 발화(src)가 있는 역극 모양 로그는 발화 단위로 고치고 같은 모양으로 다시 그린다. 없으면 본문 글을 그대로 고친다
@@ -184,6 +188,19 @@ export default function TrpgDetailPage() {
     if (!e.title.trim()) { toast('시나리오 타이틀을 입력해 주세요'); return; }
     // 본문 교체 준비 — 본문은 목록과 분리 저장이라(v2.0) 이제 TrpgLogBody 조각으로 만든다
     let bodyPatch: Partial<TrpgLogBody> = {};
+    const nextRelId = e.relId === 'none' ? undefined : e.relId;
+    const nextAuId = e.relId !== 'none' && e.auId !== 'base' ? e.auId : undefined;
+    if (bodyMode === 'keep' && bd?.src) {
+      // 원본 발화가 있는 로그 — 모양이나 자관·AU가 바뀌었으면 그 설정으로 다시 그린다 (AU가 바뀌면 이름·사진도 그 AU 것)
+      const s = bd.src;
+      const changed = s.style !== eStyle || s.fmt !== eFmt || s.faces !== eFaces
+        || (l?.relId ?? undefined) !== nextRelId || (l?.auId ?? undefined) !== nextAuId;
+      if (changed) {
+        const nextSrc = { ...s, style: eStyle, fmt: eFmt, faces: eFaces };
+        const r = await renderLogSrc(nextSrc, e.title.trim(), allChars, rels, nextRelId, nextAuId);
+        bodyPatch = { ...(await saveLogBody(r.bodyText)), bodyHtml: eFmt === 'html', src: nextSrc };
+      }
+    }
     if (bodyMode === 'file' && eFile) {
       const text = await decodeLogText(eFile);
       bodyPatch = {
@@ -410,6 +427,7 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
             });
             // 본문·썸네일 교체 상태 초기화 (기본: 현재 것 유지)
             setBodyMode('keep'); setEFile(null); setEText(bodyText ?? '');
+            if (bd?.src) { setEStyle(bd.src.style); setEFmt(bd.src.fmt); setEFaces(bd.src.faces); }
             const bh = bd?.bodyHtml ?? l.bodyHtml;
             setBodyDisp(bh === undefined ? 'auto' : bh ? 'html' : 'text');
             // 「현재 유지」에서도 위치·확대를 조정할 수 있게 지금 크롭값에서 시작한다
@@ -621,6 +639,24 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
             </div>
           )}
 
+          {/* 모양 (원본 발화가 있는 역극 로그) — 저장하면 원본 발화로 다시 그린다 (사용자 요청: "대본/메신저도 에딧에서 수정") */}
+          {bd?.src && bodyMode === 'keep' && (
+            <>
+              <label className="k-label" style={{ margin: '4px 0 0' }}>모양 (역극 로그)</label>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <div className="mini-seg">
+                  <button className={eStyle === 'imsg' ? 'on' : ''} onClick={() => setEStyle('imsg')}>메신저</button>
+                  <button className={eStyle === 'script' ? 'on' : ''} onClick={() => setEStyle('script')}>대본</button>
+                </div>
+                <div className="mini-seg">
+                  <button className={eFmt === 'html' ? 'on' : ''} onClick={() => setEFmt('html')}>HTML</button>
+                  <button className={eFmt === 'text' ? 'on' : ''} onClick={() => setEFmt('text')}>텍스트</button>
+                </div>
+                {eFmt === 'html' && <KCheck label="프로필 사진" checked={eFaces} onChange={setEFaces} />}
+                <small className="hint" style={{ margin: 0 }}>바꾸고 저장하면 원본 발화로 다시 그려집니다</small>
+              </div>
+            </>
+          )}
           {/* 본문 교체 — 기본은 현재 본문 유지 */}
           <label className="k-label" style={{ margin: '4px 0 0' }}>본문</label>
           <div className="mini-seg" style={{ justifySelf: 'start' }}>

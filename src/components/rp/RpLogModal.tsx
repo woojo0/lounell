@@ -75,7 +75,7 @@ export function RpLogModal({ room, msgs, chars, sub, isAdmin, rightIds, faceInfo
   const facesBusy = withFaces && !faces;
   const text = useMemo(() => rpLogText({ title: room.title, sub }, msgs, chars, { time }),
     [room.title, sub, msgs, chars, time]);
-  const faceOpt = style === 'imsg' && withFaces && faces ? faces : undefined;
+  const faceOpt = withFaces && faces ? faces : undefined;   // 메신저·대본 모두 (사용자 요청: "대본 형식으로 선택해도 프로필 사진이")
   const html = () => rpLogHtml({ title: room.title, sub }, msgs, chars, { time, style, rightIds, faces: faceOpt });
 
   // 파일은 방 제목으로. txt 앞의 BOM은 오래된 편집기에서도 한글이 깨지지 않게 하려는 것
@@ -99,14 +99,12 @@ export function RpLogModal({ room, msgs, chars, sub, isAdmin, rightIds, faceInfo
           </div>
           <small className="hint" style={{ margin: 0 }}>HTML 저장 · 전체보기 · RP LOG 본문에 쓰입니다 (TXT는 글만)</small>
         </div>
-        {style === 'imsg' && (
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <KCheck label="프로필 사진 넣기" checked={withFaces} onChange={setWithFaces} />
-            <small className="hint" style={{ margin: 0 }}>
-              {facesBusy ? '사진 주소를 불러오는 중…' : '상대 캐릭터 말풍선 옆에 얼굴 — 주소는 홈 저장소의 것을 그대로 씁니다'}
-            </small>
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <KCheck label="프로필 사진 넣기" checked={withFaces} onChange={setWithFaces} />
+          <small className="hint" style={{ margin: 0 }}>
+            {facesBusy ? '사진 주소를 불러오는 중…' : style === 'imsg' ? '말풍선 옆에 얼굴 — 주소는 홈 저장소의 것을 그대로 씁니다' : '이름 앞에 얼굴 — 주소는 홈 저장소의 것을 그대로 씁니다'}
+          </small>
+        </div>
         <div>
           <label className="k-label">미리보기</label>
           <pre className="rp-log-pre">{text}</pre>

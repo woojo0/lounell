@@ -6,16 +6,16 @@ import { useParams, useRouter } from 'next/navigation';
 import { useHrefBlock } from '@/components/shell/MenuGuard';
 import { sectionHref, MAIN_SEC, secStamp, useSectionTitle } from '@/lib/sectionStore';
 import { useAuth } from '@/lib/auth';
-import { useLocalList } from '@/lib/postStore';
+import { useLocalList, newId } from '@/lib/postStore';
 import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, showAsHtml, decodeLogText, logNo, saveLogBody, logPath } from '@/lib/galleryStore';
 import { isValidSlug, slugify } from '@/lib/link';
 import { Relation, REL_SEED, Character, CHAR_SEED, charGrant } from '@/lib/charStore';
-import { applyLogSides, rpSpeakers, type RpLogSrc } from '@/lib/rpLog';
+import { applyLogSides, rpSpeakers, rpLogHtml, type RpLogSrc } from '@/lib/rpLog';
+import type { RpMessage } from '@/lib/rpStore';
 import { useMenuSettings } from '@/lib/menuStore';
 import { useMembers } from '@/lib/members';
 import { canEditTrpg, trpgEditorIds } from '@/lib/trpgPerm';
 import { logViewChars, renderLogSrc } from '@/lib/rpLogSrc';
-import { LogSrcEditor } from '@/components/rp/LogSrcEditor';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { getBlob, putBlob, useBlobUrl } from '@/lib/blobStore';
 import { PageTitle, EditableDesc } from '@/components/ui/PageText';
@@ -23,6 +23,9 @@ import { KInput, KSelect, KDate, KTextarea, KCheck } from '@/components/ui/Kit';
 import { ColorField } from '@/components/ui/ColorField';
 import { CropEditor, CropImg, CropValue } from '@/components/ui/CropEditor';
 import { useToast } from '@/components/ui/Toast';
+
+/** 발화 수정 창에서 「지문(서술)」을 고르는 값 */
+const DESC_KEY = '__desc';
 
 /** 로그 렌더 프레임 — 대형 문서도 안정적으로 로드되도록 srcdoc 대신 Blob URL 사용 */
 function LogFrame({ frameRef, html, title, onFrameLoad }: {
@@ -145,50 +148,101 @@ export default function TrpgDetailPage() {
   const [eFmt, setEFmt] = useState<'html' | 'text'>('html');
   const [eFaces, setEFaces] = useState(true);
 
-  // 본문 편집 모드 (커플홈 사용자 요청 — "등록한 다음에 편집모드를 켜서 내용도 수정") —
-  // 원본 발화(src)가 있는 역극 모양 로그는 발화 단위로 고치고 같은 모양으로 다시 그린다. 없으면 본문 글을 그대로 고친다
+  // 편집모드 (커플홈 사용자 요청 — "본문 편집을 따로 두지 말고 편집모드 버튼 … 개별 롤플을 편집 … 우클릭이나 호버로").
+  // 원본 발화(src)가 있는 로그: 프레임 안에 심은 스크립트(아래 inject)가 발화 위 호버 도구(✎ ＋ ✕)와 우클릭 메뉴를 띄우고,
+  // 고른 동작을 postMessage로 알려 오면 여기서 작은 수정 창을 열어 그 발화만 고친 뒤 같은 모양으로 다시 그린다
+  // (널 오리진 샌드박스라 바깥은 프레임 문서를 직접 못 만진다). 원본이 없는 로그(파일·직접 작성)는 발화 단위가 없어 본문 글을 그대로 고치는 칸
   const [editing, setEditing] = useState(false);
-  const [eSrc, setESrc] = useState<RpLogSrc | null>(null);
+  const editingRef = useRef(false); editingRef.current = editing;
   const [eBody, setEBody] = useState('');
   const [saving, setSaving] = useState(false);
-  const startBodyEdit = () => {
-    if (bd?.src) setESrc(bd.src);
-    else { setESrc(null); setEBody(bodyText ?? ''); }
+  /** 발화 하나 수정·추가 창 — i는 원본 발화 번호(data-i), insert면 그 아래에 */
+  const [msgEdit, setMsgEdit] = useState<{ mode: 'edit' | 'insert'; i: number; charId: string; text: string } | null>(null);
+  const [msgDel, setMsgDel] = useState<number | null>(null);
+  const toggleEdit = () => {
+    if (editing) { setEditing(false); return; }
+    if (!bd?.src) setEBody(bodyText ?? '');
+    // 이 기능 전에 그린 본문에는 발화 번호(data-i)가 없다 — 켜는 김에 원본 발화로 한 번 다시 그려 저장 (같은 내용, 번호만 붙는다)
+    else if (bd.src.fmt === 'html' && bodyText && !/ data-i="/.test(bodyText)) void commitSrc(bd.src);
     setEditing(true);
   };
-  const saveBodyEdit = async () => {
+  /** 프레임에 편집모드 켜짐/꺼짐 알리기 — 토글할 때와 문서가 새로 뜰 때(onFrameLoad) */
+  const sendEditMode = () => {
+    try { frameRef.current?.contentWindow?.postMessage({ __logEditMode: editingRef.current && !!bd?.src }, '*'); } catch { /* 무시 */ }
+  };
+  useEffect(() => { sendEditMode(); }, [editing, bd?.src]);   // eslint-disable-line react-hooks/exhaustive-deps
+  /** 본문 문서 갈아 끼우기 (+ 목록 문서 일부) — 편집모드는 그대로 두고 본문만 다시 로드한다 */
+  const saveBodyPatch = (patch: Partial<TrpgLogBody>, logPatch: Partial<TrpgLog>) => {
+    if (!l) return;
+    const editorIds = trpgEditorIds(menuSet, l.secId ?? MAIN_SEC, members, l.editorIds);
+    const nextBody: TrpgLogBody = {
+      id, ...bd, body: '', bodyId: undefined, ...patch,
+      authorId: bd?.authorId ?? l.authorId, editorIds,
+      visibility: bodyVisibility(l), ...secStamp(l.secId ?? MAIN_SEC),
+    };
+    // 본문 문서는 뒤에 붙인다 (기존 본문들의 자리가 밀려 재저장되지 않게 — saveEdit와 같은 이유)
+    setBodies(bd ? bodies.map(x => x.id === id ? nextBody : x) : [...bodies, nextBody]);
+    setLogs(logs.map(x => x.id === id ? { ...x, ...logPatch, editorIds } : x));
+    setBodyText(null);   // 본문 다시 로드 — 프레임이 다시 뜨면 onFrameLoad가 편집모드를 다시 켠다
+  };
+  /** 원본 발화를 바꾼 뒤 저장 — 같은 모양으로 다시 그린다 */
+  const commitSrc = async (nextSrc: RpLogSrc) => {
+    if (!l || saving) return;
+    if (!nextSrc.msgs.length) { toast('발화가 하나도 없습니다 — 한 줄은 남겨 주세요'); return; }
+    setSaving(true);
+    try {
+      const r = await renderLogSrc(nextSrc, l.title, allChars, rels, l.relId, l.auId);
+      const logPatch: Partial<TrpgLog> = {};
+      // 「동행」 칸이 자동값(말한 캐릭터 이름)이었으면 바뀐 발화자에 맞춘다 — 직접 고쳐 둔 것은 그대로
+      const prevAuto = bd?.src
+        ? rpSpeakers(bd.src.msgs, logViewChars(allChars, rels, l.relId, l.auId).viewChars).map(c => c.name).join(' · ')
+        : undefined;
+      if (!l.withText || l.withText === prevAuto) logPatch.withText = r.withText;
+      saveBodyPatch({ ...(await saveLogBody(r.bodyText)), bodyHtml: nextSrc.fmt === 'html', src: nextSrc }, logPatch);
+      toast('저장했습니다');
+    } finally {
+      setSaving(false);
+    }
+  };
+  /** 원본이 없는 로그 — 본문 글을 그대로 고친 것 저장 */
+  const saveRawBody = async () => {
     if (!l || saving) return;
     setSaving(true);
     try {
-      let patch: Partial<TrpgLogBody>;
-      const logPatch: Partial<TrpgLog> = {};
-      if (eSrc) {
-        if (!eSrc.msgs.length) { toast('발화가 하나도 없습니다 — 한 줄은 남겨 주세요'); return; }
-        const r = await renderLogSrc(eSrc, l.title, allChars, rels, l.relId, l.auId);
-        patch = { ...(await saveLogBody(r.bodyText)), bodyHtml: eSrc.fmt === 'html', src: eSrc };
-        // 「동행」 칸이 자동값(말한 캐릭터 이름)이었으면 바뀐 발화자에 맞춘다 — 직접 고쳐 둔 것은 그대로
-        const prevAuto = bd?.src
-          ? rpSpeakers(bd.src.msgs, logViewChars(allChars, rels, l.relId, l.auId).viewChars).map(c => c.name).join(' · ')
-          : undefined;
-        if (!l.withText || l.withText === prevAuto) logPatch.withText = r.withText;
-      } else {
-        patch = { ...(await saveLogBody(eBody)) };
-      }
-      const editorIds = trpgEditorIds(menuSet, l.secId ?? MAIN_SEC, members, l.editorIds);
-      const nextBody: TrpgLogBody = {
-        id, ...bd, body: '', bodyId: undefined, ...patch,
-        authorId: bd?.authorId ?? l.authorId, editorIds,
-        visibility: bodyVisibility(l), ...secStamp(l.secId ?? MAIN_SEC),
-      };
-      // 본문 문서는 뒤에 붙인다 (기존 본문들의 자리가 밀려 재저장되지 않게 — saveEdit와 같은 이유)
-      setBodies(bd ? bodies.map(x => x.id === id ? nextBody : x) : [...bodies, nextBody]);
-      setLogs(logs.map(x => x.id === id ? { ...x, ...logPatch, editorIds } : x));
-      setBodyText(null);   // 본문 다시 로드
+      saveBodyPatch({ ...(await saveLogBody(eBody)) }, {});
       setEditing(false);
       toast('본문을 저장했습니다');
     } finally {
       setSaving(false);
     }
+  };
+  const blankMsg = (prev?: RpMessage): RpMessage =>
+    ({ id: newId(), kind: 'desc', authorId: '', text: '', date: prev?.date ?? new Date().toISOString() });
+  /** 수정·추가 창 SAVE */
+  const saveMsgEdit = () => {
+    const s = bd?.src, me = msgEdit;
+    if (!s || !me) return;
+    if (!me.text.trim()) { toast('내용을 입력해 주세요'); return; }
+    const base = me.mode === 'edit' ? s.msgs[me.i] : blankMsg(s.msgs[me.i]);
+    const next: RpMessage = me.charId === DESC_KEY
+      ? { ...base, kind: 'desc', charId: undefined, text: me.text }
+      : { ...base, kind: 'char', charId: me.charId, text: me.text };
+    const msgs = [...s.msgs];
+    if (me.mode === 'edit') msgs[me.i] = next; else msgs.splice(me.i + 1, 0, next);
+    setMsgEdit(null);
+    void commitSrc({ ...s, msgs });
+  };
+  /** 프레임 안에서 고른 동작(수정·아래에 추가·삭제) — onMsg는 한 번만 등록되므로 ref로 최신 함수를 본다 */
+  const editActRef = useRef<(action: string, i: number) => void>(() => {});
+  editActRef.current = (action, i) => {
+    const s = bd?.src;
+    if (!s || !editingRef.current) return;
+    const m = s.msgs[i];
+    if (!m) return;
+    const charId = m.kind === 'char' ? (m.charId ?? '') : DESC_KEY;
+    if (action === 'delete') setMsgDel(i);
+    else if (action === 'insert') setMsgEdit({ mode: 'insert', i, charId, text: '' });
+    else setMsgEdit({ mode: 'edit', i, charId, text: m.text });
   };
 
   const saveEdit = async () => {
@@ -299,6 +353,9 @@ export default function TrpgDetailPage() {
   useEffect(() => {
     const onMsg = (e: MessageEvent) => {
       if (e.source !== frameRef.current?.contentWindow) return;
+      // 편집모드 — 프레임 안에서 고른 발화 동작 (커플홈)
+      const ed = (e.data as { __logEdit?: { action?: unknown; i?: unknown } })?.__logEdit;
+      if (ed && typeof ed.action === 'string' && typeof ed.i === 'number') { editActRef.current(ed.action, ed.i); return; }
       const h = (e.data as { __logH?: unknown })?.__logH;
       if (typeof h === 'number' && isFinite(h) && frameRef.current) {
         // scrollHeight는 최소한 뷰포트(=현재 iframe 높이)만큼 보고되므로 여기에 여백을
@@ -321,6 +378,7 @@ export default function TrpgDetailPage() {
     if (!frameRef.current) return;
     gotHeightRef.current = false;
     frameRef.current.style.height = '240px';
+    sendEditMode();   // 새로 뜬 문서에 편집모드 상태 알리기 (저장 뒤 다시 그려져도 편집모드가 이어진다)
     // 보고가 하나도 안 오는 문서(스크립트가 막힌 경우)만 기본 높이로 되돌린다.
     // 3초로 늘렸다 — 리포터가 2초마다 같은 값이라도 다시 알려 오므로, 그 사이에 제자리를 찾는다
     setTimeout(() => {
@@ -352,7 +410,18 @@ export default function TrpgDetailPage() {
   const rel = rels.find(r => r.id === l.relId);
   const canEdit = canEditTrpg(l, { loggedIn: !!user, isAdmin, id: user?.id });
   const canDelete = isAdmin || (!!user && l.authorId === user.id);   // 삭제는 본인과 관리자만
-  const srcChars = logViewChars(allChars, rels, l.relId, l.auId);   // 본문 편집의 발화자 목록 (자관 멤버 먼저)
+  const srcChars = logViewChars(allChars, rels, l.relId, l.auId);   // 편집모드 수정 창의 발화자 목록 (자관 멤버 먼저)
+  const msgCharOptions = (() => {
+    const base = [
+      ...srcChars.members.map(c => ({ value: c.id, label: c.name })),
+      ...srcChars.others.map(c => ({ value: c.id, label: `그 밖 · ${c.name}` })),
+      { value: DESC_KEY, label: '지문(서술)' },
+    ];
+    // 지워진 캐릭터의 발화 — 고르는 목록엔 없지만 지금 값은 보여 준다
+    return msgEdit && !base.some(o => o.value === msgEdit.charId) ? [{ value: msgEdit.charId, label: '(삭제된 캐릭터)' }, ...base] : base;
+  })();
+  // 프레임 안 편집 도구의 색 — 홈의 포인트색을 따른다 (프레임 문서에는 CSS 변수가 없어 값으로 넣는다)
+  const accent = (typeof window !== 'undefined' && getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()) || '#5d636d';
   const body = bodyText ?? '';
   // 지정값이 있으면 그대로 — 직접 쓴 글이 태그처럼 보이는 문자 때문에 HTML로 오판되던 것 방지
   /* 메신저 모양 역극 로그의 좌우는 보는 사람 기준 (커플홈 사용자 요청) — 관리자는 자캐가 오른쪽, 역극 참여 회원은
@@ -413,13 +482,50 @@ r(1);})();
 </scr${''}ipt><style>
 /* height:auto — 로그 문서가 html/body에 100%를 걸어 두면 내용과 무관하게 뷰포트만큼 커진다 */
 html,body{margin:0!important;padding:0!important;height:auto!important;min-height:0!important}
+</style><scr${''}ipt>
+// 편집모드 (커플홈) — 바깥(상세 페이지)이 {__logEditMode:true}를 보내면 발화([data-i]) 위 호버 도구(✎ ＋ ✕)와 우클릭 메뉴를 켠다.
+// 고른 동작은 {__logEdit:{action,i}}로 바깥에 알리고, 바깥이 그 발화만 고쳐 문서를 다시 그린다 (널 오리진이라 바깥은 이 문서를 못 만진다)
+(function(){var on=false,tools=null,menu=null;
+function send(a,i){parent.postMessage({__logEdit:{action:a,i:i}},'*')}
+function tgt(e){var t=e.target;while(t&&t.nodeType===1&&!t.hasAttribute('data-i'))t=t.parentNode;return t&&t.nodeType===1?t:null}
+function hide(){if(menu){if(menu.parentNode)menu.parentNode.removeChild(menu);menu=null}}
+function mk(label,act,i,cls){var b=document.createElement('button');b.type='button';b.textContent=label;b.className=cls||'';
+b.onmousedown=function(ev){ev.preventDefault();ev.stopPropagation()};b.onclick=function(ev){ev.stopPropagation();ev.preventDefault();hide();send(act,i)};return b}
+document.addEventListener('contextmenu',function(e){if(!on)return;var t=tgt(e);if(!t)return;e.preventDefault();hide();var i=+t.getAttribute('data-i');
+menu=document.createElement('div');menu.className='lg-menu';menu.appendChild(mk('✎ 수정하기','edit',i));menu.appendChild(mk('＋ 아래에 추가','insert',i));menu.appendChild(mk('✕ 삭제하기','delete',i,'danger'));
+document.body.appendChild(menu);var w=menu.offsetWidth,maxX=document.documentElement.scrollWidth-w-6;menu.style.left=Math.max(4,Math.min(e.pageX,maxX))+'px';menu.style.top=e.pageY+'px'});
+document.addEventListener('mousedown',function(e){if(menu&&!menu.contains(e.target))hide()});
+document.addEventListener('keydown',function(e){if(e.key==='Escape')hide()});
+document.addEventListener('mouseover',function(e){if(!on)return;var t=tgt(e);if(!t)return;if(tools&&tools.parentNode===t)return;
+if(!tools){tools=document.createElement('div');tools.className='lg-tools'}tools.innerHTML='';var i=+t.getAttribute('data-i');
+tools.appendChild(mk('✎','edit',i));tools.appendChild(mk('＋','insert',i));tools.appendChild(mk('✕','delete',i,'danger'));t.appendChild(tools)});
+window.addEventListener('message',function(e){var d=e.data||{};if(typeof d.__logEditMode==='boolean'){on=d.__logEditMode;document.documentElement.classList.toggle('lg-edit',on);
+if(!on){hide();if(tools&&tools.parentNode)tools.parentNode.removeChild(tools)}}});
+})();
+</scr${''}ipt><style>
+/* 편집모드 도구 (커플홈) — 바깥이 켤 때만 (html.lg-edit) */
+.lg-edit [data-i]{position:relative;cursor:pointer}
+.lg-edit [data-i]:hover{outline:1.5px dashed color-mix(in srgb,${accent} 55%,transparent);outline-offset:4px;border-radius:10px}
+.lg-tools{position:absolute;top:-14px;right:0;display:none;gap:2px;z-index:9;background:#fff;border:1px solid #d9dbe0;border-radius:8px;padding:2px;box-shadow:0 2px 8px rgba(0,0,0,.12)}
+.lg-edit [data-i]:hover>.lg-tools{display:flex}
+.lg-tools button,.lg-menu button{border:0;background:transparent;cursor:pointer;font:inherit;font-size:11px;line-height:1;padding:5px 7px;border-radius:6px;color:#3c434d;white-space:nowrap}
+.lg-tools button:hover,.lg-menu button:hover{background:color-mix(in srgb,${accent} 10%,#fff);color:${accent}}
+.lg-tools button.danger:hover,.lg-menu button.danger:hover{background:rgba(200,60,60,.1);color:#b23a3a}
+.lg-menu{position:absolute;z-index:99;display:flex;flex-direction:column;background:#fff;border:1px solid #d9dbe0;border-radius:9px;padding:4px;box-shadow:0 6px 18px rgba(0,0,0,.15);min-width:132px}
+.lg-menu button{text-align:left;padding:7px 10px;font-size:12px}
 </style>`;
   /** 주입 위치 — <!DOCTYPE ...> 가 있으면 그 **바로 뒤**에, 없으면 doctype을 만들어 앞에.
    *  표준 모드를 지켜야 body 높이가 진짜 내용 높이가 된다 (위 주석 참조) */
-  const dt = /^\s*<!doctype[^>]*>/i.exec(sidedBody);
-  const srcDoc = dt
-    ? sidedBody.slice(0, dt[0].length) + inject + sidedBody.slice(dt[0].length)
-    : `<!DOCTYPE html>${inject}${sidedBody}`;
+  const buildDoc = (doc: string) => {
+    const dt = /^\s*<!doctype[^>]*>/i.exec(doc);
+    return dt ? doc.slice(0, dt[0].length) + inject + doc.slice(dt[0].length) : `<!DOCTYPE html>${inject}${doc}`;
+  };
+  const srcDoc = buildDoc(sidedBody);
+  // 텍스트 모양으로 저장된 역극 로그도 편집모드에서는 임시로 대본 모양 HTML로 그려 발화 단위로 고칠 수 있게 (저장은 텍스트 그대로)
+  const editDoc = editing && bd?.src && !html
+    ? buildDoc(rpLogHtml({ title: l.title, sub: l.withText }, bd.src.msgs, srcChars.viewChars,
+        { time: bd.src.time, forBoard: true, style: 'script', rightIds: [], neutralSides: true, noMeta: bd.src.noMeta }))
+    : null;
 
   return (
     <section className="page">
@@ -433,8 +539,8 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
             const href = au ? `/rels/${rel.id}?au=${encodeURIComponent(au.slug?.trim() || au.id)}` : `/rels/${rel.id}`;
             return <button className="btn btn-dark" onClick={() => router.push(href)}>{au ? `${rel.name} · ${au.label || 'AU'}` : rel.name} ›</button>;
           })()}
-          {/* 본문 편집 — 발화 단위(원본이 있을 때) 또는 본문 글 그대로 (커플홈 사용자 요청) */}
-          {canEdit && !editing && <button className="btn btn-ghost" onClick={startBodyEdit}>본문 편집</button>}
+          {/* 편집모드 — 발화 위 호버 도구·우클릭 메뉴로 하나씩 고친다 (원본이 없는 로그는 본문 글 그대로) */}
+          {canEdit && <button className={`btn ${editing ? 'btn-dark' : 'btn-ghost'}`} onClick={toggleEdit}>{editing ? '편집 끝' : '편집모드'}</button>}
           {canEdit && <button className="btn btn-dark" onClick={() => {
             setE({
               noText: l.noText ?? '', slug: l.slug ?? '', title: l.title, catchphrase: l.catchphrase ?? '', writer: l.writer,
@@ -467,29 +573,29 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
         {l.catchphrase && (
           <p style={{ fontSize: 11.5, color: 'var(--faint)', letterSpacing: '.14em', marginBottom: 16 }}>{l.catchphrase}</p>
         )}
-        {editing ? (
-          /* 본문 편집 모드 (커플홈) — 원본 발화가 있으면 줄 단위, 없으면 본문 글 그대로 */
+        {editing && !bd?.src ? (
+          /* 원본 발화가 없는 로그(파일·직접 작성) — 본문 글을 그대로 고친다 */
           <div className="lsrc-wrap">
             <div className="lsrc-bar">
-              <button className="btn btn-dark" disabled={saving} onClick={saveBodyEdit}>{saving ? '저장 중…' : 'SAVE'}</button>
+              <button className="btn btn-dark" disabled={saving} onClick={saveRawBody}>{saving ? '저장 중…' : 'SAVE'}</button>
               <button className="btn btn-ghost" disabled={saving} onClick={() => setEditing(false)}>CANCEL</button>
               <small className="hint" style={{ margin: 0 }}>
-                {eSrc ? '발화자와 내용을 고치고 SAVE — 같은 모양으로 다시 그려집니다' : html ? 'HTML 원문을 그대로 고칩니다' : '본문을 그대로 고칩니다'}
+                {html ? 'HTML 원문을 그대로 고칩니다 — 이 로그는 원본 발화가 없어 발화 단위로는 고칠 수 없습니다' : '본문을 그대로 고칩니다'}
               </small>
             </div>
-            {eSrc
-              ? <LogSrcEditor src={eSrc} onChange={setESrc} members={srcChars.members} others={srcChars.others} />
-              : <KTextarea maxRows={40} value={eBody} onChange={ev => setEBody(ev.target.value)}
-                  style={{ minHeight: 320, ...(html ? { fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 12 } : {}) }} />}
-            {eSrc && (
-              <div className="lsrc-bar">
-                <button className="btn btn-dark" disabled={saving} onClick={saveBodyEdit}>{saving ? '저장 중…' : 'SAVE'}</button>
-              </div>
-            )}
+            <KTextarea maxRows={40} value={eBody} onChange={ev => setEBody(ev.target.value)}
+              style={{ minHeight: 320, ...(html ? { fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 12 } : {}) }} />
           </div>
-        ) : html ? (
-          /* 원본 스타일·스크립트 유지 — 널 오리진 샌드박스라 사이트 데이터에는 접근 불가 (6.3 격리) */
-          <LogFrame frameRef={frameRef} html={srcDoc} title={l.title} onFrameLoad={onFrameLoad} />
+        ) : html || editDoc ? (
+          <>
+            {editing && (
+              <p className="hint" style={{ margin: '0 0 10px' }}>
+                편집모드 — 발화 위에 마우스를 올리면 ✎(수정) ＋(아래에 추가) ✕(삭제)가 뜨고, 우클릭 메뉴로도 됩니다. 다 고쳤으면 「편집 끝」
+              </p>
+            )}
+            {/* 원본 스타일·스크립트 유지 — 널 오리진 샌드박스라 사이트 데이터에는 접근 불가 (6.3 격리) */}
+            <LogFrame frameRef={frameRef} html={editDoc ?? srcDoc} title={l.title} onFrameLoad={onFrameLoad} />
+          </>
         ) : (
           body
             ? <div className="log-plain">{body}</div>
@@ -724,6 +830,31 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
           onClose={() => setECropOpen(false)}
           onApply={c => { setEThumbCrop(c); setECropOpen(false); }} />
       )}
+
+      {/* 편집모드 — 발화 하나 수정·추가 창 */}
+      <Modal open={!!msgEdit} onClose={() => setMsgEdit(null)} title={msgEdit?.mode === 'insert' ? '발화 추가 (아래에)' : '발화 수정'} small
+        actions={<>
+          <button className="btn btn-ghost" onClick={() => setMsgEdit(null)}>CANCEL</button>
+          <button className="btn btn-dark" disabled={saving} onClick={saveMsgEdit}>{saving ? '저장 중…' : 'SAVE'}</button>
+        </>}>
+        {msgEdit && (
+          <div style={{ display: 'grid', gap: 9 }}>
+            <KSelect minWidth={170} value={msgEdit.charId} onChange={v => setMsgEdit(s => (s ? { ...s, charId: v } : s))} options={msgCharOptions} />
+            <KTextarea maxRows={18} value={msgEdit.text} onChange={ev => setMsgEdit(s => (s ? { ...s, text: ev.target.value } : s))}
+              placeholder={msgEdit.charId === DESC_KEY ? '지문(서술)' : '대사'} style={{ minHeight: 120 }} />
+          </div>
+        )}
+      </Modal>
+      <ConfirmModal open={msgDel !== null} title="이 발화를 삭제할까요?" body="삭제한 발화는 되돌릴 수 없습니다."
+        onClose={() => setMsgDel(null)}
+        buttons={[
+          { label: 'DELETE', kind: 'accent', onClick: () => {
+            const s = bd?.src, i = msgDel;
+            setMsgDel(null);
+            if (s && i !== null) void commitSrc({ ...s, msgs: s.msgs.filter((_, j) => j !== i) });
+          } },
+          { label: 'CANCEL', kind: 'ghost', onClick: () => setMsgDel(null) },
+        ]} />
 
       <ConfirmModal open={delAsk} title="로그를 삭제하시겠습니까?" body="삭제한 로그는 복구할 수 없습니다."
         onClose={() => setDelAsk(false)}

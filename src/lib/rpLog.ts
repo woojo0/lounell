@@ -131,14 +131,14 @@ function imsgRows(msgs: RpMessage[], chars: Character[], opts: RpLogOpts): strin
     const txt = m.text || (m.imgId ? '[사진]' : '');
     if (m.kind !== 'char') {
       const dm = m.text.trim().match(DATE_RE);
-      rows.push(`<div class="sys${dm ? ' date' : ''}">${dm ? `<b>${esc(dm[1])}</b>${esc(dm[2])}` : esc(txt)}</div>`);
+      rows.push(`<div class="sys${dm ? ' date' : ''}" data-i="${i}">${dm ? `<b>${esc(dm[1])}</b>${esc(dm[2])}` : esc(txt)}</div>`);
       return;
     }
     const me = right.has(m.charId ?? '');
     if (m.rp) {
       const c = chars.find(x => x.id === m.charId);
       const hex = safeHex(c?.color);
-      rows.push(`<div class="m${!opts.neutralSides && me ? ' me' : ''}" data-c="${esc(m.charId ?? '')}" style="--c:${hex};--rgb:${hexRgb(hex)}"><div class="who">${faceTag(opts, m.charId)}<span>${esc(nameOf(chars, m.charId))}</span></div><div class="txt">${esc(txt)}</div></div>`);
+      rows.push(`<div class="m${!opts.neutralSides && me ? ' me' : ''}" data-c="${esc(m.charId ?? '')}" data-i="${i}" style="--c:${hex};--rgb:${hexRgb(hex)}"><div class="who">${faceTag(opts, m.charId)}<span>${esc(nameOf(chars, m.charId))}</span></div><div class="txt">${esc(txt)}</div></div>`);
       return;
     }
     const prev = msgs[i - 1], next = msgs[i + 1];
@@ -153,7 +153,7 @@ function imsgRows(msgs: RpMessage[], chars: Character[], opts: RpLogOpts): strin
     const f = opts.faces?.[m.charId ?? ''];
     const face = opts.faces ? `<span class="f">${f ? `<img src="${esc(f.url)}" style="${esc(f.style)}" alt="">` : ''}</span>` : '';
     const nm = nameNeeded && (opts.neutralSides || !me) ? `<div class="n">${esc(nameOf(chars, m.charId))}</div>` : '';
-    rows.push(`<div class="b${side}${first ? ' first' : ''}${last ? ' last' : ''}" data-c="${esc(m.charId ?? '')}">${face}<div class="col">${nm}<div class="bub${short ? ' short' : ''}">${esc(txt)}</div></div></div>`);
+    rows.push(`<div class="b${side}${first ? ' first' : ''}${last ? ' last' : ''}" data-c="${esc(m.charId ?? '')}" data-i="${i}">${face}<div class="col">${nm}<div class="bub${short ? ' short' : ''}">${esc(txt)}</div></div></div>`);
   });
   return rows;
 }
@@ -235,7 +235,8 @@ ${imsgRows(msgs, chars, opts).join('\n')}
   }
   const rows: string[] = [];
   let day = '';
-  for (const m of msgs) {
+  // data-i = 발화 번호 — RP LOG 상세의 편집모드가 호버·우클릭한 발화를 알아보는 데 쓴다 (커플홈)
+  msgs.forEach((m, i) => {
     if (opts.time) {
       const d = ymd(m.date);
       if (d !== day) { day = d; rows.push(`<div class="day">${d}</div>`); }
@@ -244,11 +245,11 @@ ${imsgRows(msgs, chars, opts).join('\n')}
     if (m.kind === 'char') {
       const c = chars.find(x => x.id === m.charId);
       const hex = safeHex(c?.color);
-      rows.push(`<div class="m" data-c="${esc(m.charId ?? '')}" style="--c:${hex};--rgb:${hexRgb(hex)}"><div class="who">${faceTag(opts, m.charId)}<span>${esc(nameOf(chars, m.charId))}</span>${t}</div><div class="txt">${esc(m.text || (m.imgId ? '[사진]' : ''))}</div></div>`);
+      rows.push(`<div class="m" data-c="${esc(m.charId ?? '')}" data-i="${i}" style="--c:${hex};--rgb:${hexRgb(hex)}"><div class="who">${faceTag(opts, m.charId)}<span>${esc(nameOf(chars, m.charId))}</span>${t}</div><div class="txt">${esc(m.text || (m.imgId ? '[사진]' : ''))}</div></div>`);
     } else {
-      rows.push(`<div class="d">${t}${esc(m.text || (m.imgId ? '[사진]' : ''))}</div>`);
+      rows.push(`<div class="d" data-i="${i}">${t}${esc(m.text || (m.imgId ? '[사진]' : ''))}</div>`);
     }
-  }
+  });
   const meta = opts.noMeta ? '' : [rpLogRange(msgs), `대화 ${msgs.length}개`].filter(Boolean).join(' · ');
   const hdIn = `${opts.forBoard ? '' : `<h1>${esc(info.title)}</h1>${info.sub ? `<div class="sub">${esc(info.sub)}</div>` : ''}`}${meta ? `<div class="meta">${esc(meta)}</div>` : ''}`;
   return `<!DOCTYPE html>

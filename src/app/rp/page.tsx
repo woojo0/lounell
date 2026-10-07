@@ -530,6 +530,12 @@ export default function RpPage() {
                     <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10.5 }}
                       onClick={() => setLogOpen(true)}>LOG</button>
                   )}
+                  {/* SHOW ALL — 참여자(관리자 아님)에게만, 관리자 버튼들이 뜨는 이 자리에 (커플홈 사용자 확정).
+                      대화 전부를 새 탭 한 장으로. 관리자는 LOG 창의 전체보기로 */}
+                  {!isAdmin && msgsOf(sel).length > 0 && (
+                    <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10.5 }}
+                      onClick={showAll}>SHOW ALL</button>
+                  )}
                   {canManage && (
                     <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10.5 }}
                       onClick={removeRoom}>DELETE</button>
@@ -538,13 +544,10 @@ export default function RpPage() {
               </div>
 
               <div className={`rp-msgs${imsg ? ' imsg' : ''}`} ref={msgsRef} onScroll={onMsgsScroll}>
-                {/* 잘라 둔 이전 대화 더보기 + SHOW ALL(전체를 새 탭 한 장으로) — 참여자 누구나 (커플홈) */}
-                {allMsgs.length > 0 && (
+                {/* 잘라 둔 이전 대화 더보기 (커플홈) — SHOW ALL은 머리줄의 관리 버튼 자리에 (사용자 확정) */}
+                {hiddenCount > 0 && (
                   <div className="rp-topbtns">
-                    {hiddenCount > 0 && (
-                      <button className="btn btn-ghost rp-more" onClick={loadMore}>이전 대화 더보기 ({hiddenCount})</button>
-                    )}
-                    <button className="btn btn-ghost rp-more" onClick={showAll}>SHOW ALL ↗</button>
+                    <button className="btn btn-ghost rp-more" onClick={loadMore}>이전 대화 더보기 ({hiddenCount})</button>
                   </div>
                 )}
                 {visibleMsgs.map((m, mi, arr) => {

@@ -403,7 +403,8 @@ a{color:inherit;text-decoration:none}
 .btn-dark{background:var(--btn-dark,var(--ink));color:var(--btn-dark-fg,#fff);height:35px;padding-top:0;padding-bottom:0;box-sizing:border-box}
 .btn-dark:hover{background:var(--btn-dark-hv,#33373e)}
 .btn-ghost{border:1.5px solid var(--line);color:var(--sub);background:#fff}
-.btn-ghost:hover{border-color:var(--steel-3);color:var(--ink)}
+/* 호버는 테마(포인트)색 계열로 — 무채색 검정으로 빠지지 않게 (커플홈 사용자 확정: SHOW ALL·나머지 버튼도) */
+.btn-ghost:hover{border-color:color-mix(in srgb,var(--accent) 55%,var(--line));color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,#fff)}
 .btn-accent{background:var(--accent);color:#fff}
 .btn-accent:hover{background:var(--accent-soft)}
 /* 어두운 페이지 배경 위의 저강조 버튼 (CANCEL 등 — 주버튼보다 약하게) */
@@ -1549,7 +1550,7 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
   background:var(--panel);color:var(--sub);box-shadow:var(--sh-sm);
 }
 .tag-row .tag small{font-size:calc(10px*var(--fs,1));color:var(--faint)}
-.tag-row .tag:hover{color:var(--ink);transform:translateY(-1px)}
+.tag-row .tag:hover{color:var(--accent);transform:translateY(-1px)}   /* 호버도 테마색 (커플홈) */
 /* 선택 필터 = 진한 버튼 색 연동 (v1.9 사용자 확정) */
 .tag-row .tag.on{background:var(--btn-dark,var(--ink));color:var(--btn-dark-fg,#fff)}
 .tag-row .tag.on small{color:var(--btn-dark-fg,#aab0ba);opacity:.65}

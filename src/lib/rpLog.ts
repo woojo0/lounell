@@ -250,12 +250,21 @@ ${rows.join('\n')}
 `;
 }
 
+/** 먼저 올린 메신저 본문의 옛 CSS를 지금 것으로 (커플홈 사용자 제보 — 내 쪽 얼굴이 말풍선 꼬리 조각에 가려 왼쪽이 잘려 보였다):
+ *  본문에 CSS가 박혀 있어 다시 올리지 않으면 안 바뀌므로, 상세에서 그릴 때 알려진 옛 규칙만 바꿔 끼운다 */
+export function fixLegacyImsgCss(html: string): string {
+  return html
+    .replace(".b.me{align-self:flex-end;flex-direction:row-reverse;gap:6px;margin-right:8px}", ".b.me{align-self:flex-end;flex-direction:row-reverse;gap:14px;margin-right:8px}")
+    .replace(".f{width:26px;height:26px;border-radius:50%;overflow:hidden;position:relative;flex-shrink:0;align-self:flex-end;background:#d8d8dc}", ".f{width:26px;height:26px;border-radius:50%;overflow:hidden;position:relative;z-index:2;flex-shrink:0;align-self:flex-end;background:#d8d8dc}")
+    .replace('\n.b.me .f{display:none}', '');
+}
+
 /** 좌우를 안 정한 메신저 본문(neutralSides)에 보는 사람 기준으로 me/them을 붙인다 (커플홈 사용자 요청 —
  *  RP LOG 게시판에서는 관리자에게는 자캐가, 역극 참여 회원에게는 자기 캐릭터가 오른쪽).
  *  이미 좌우가 있는 본문(파일 저장본·옛 로그)은 data-c가 없어 그대로다 */
 export function applyLogSides(html: string, rightIds: string[]): string {
   const right = new Set(rightIds);
-  return html
+  return fixLegacyImsgCss(html)
     .replace(/<div class="b([^"]*)" data-c="([^"]*)"/g, (_s, cls: string, id: string) =>
       `<div class="b${cls} ${right.has(id) ? 'me' : 'them'}" data-c="${id}"`)
     .replace(/<div class="m([^"]*)" data-c="([^"]*)"/g, (_s, cls: string, id: string) =>

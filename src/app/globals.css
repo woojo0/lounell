@@ -405,6 +405,9 @@ a{color:inherit;text-decoration:none}
 .btn-ghost{border:1.5px solid var(--line);color:var(--sub);background:#fff}
 /* 호버는 테마(포인트)색 계열로 — 무채색 검정으로 빠지지 않게 (커플홈 사용자 확정: SHOW ALL·나머지 버튼도) */
 .btn-ghost:hover{border-color:color-mix(in srgb,var(--accent) 55%,var(--line));color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,#fff)}
+/* 어두운 버튼(35px 고정)과 나란히 서는 자리 — 페이지 머리줄·역극 방 머리·모달 하단 — 에서는 테두리 버튼도 같은 높이로
+   (커플홈 사용자 제보: "편집모드 버튼 세로가 다른 버튼들보다 작아 보여"). 패딩을 따로 준 작은 인라인 테두리 버튼은 그대로 */
+.head-actions .btn-ghost,.rp-head .btn-ghost,.modal-actions .btn-ghost{height:35px;padding-top:0;padding-bottom:0;box-sizing:border-box}
 .btn-accent{background:var(--accent);color:#fff}
 .btn-accent:hover{background:var(--accent-soft)}
 /* 어두운 페이지 배경 위의 저강조 버튼 (CANCEL 등 — 주버튼보다 약하게) */

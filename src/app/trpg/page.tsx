@@ -4,7 +4,10 @@
 import React, { Fragment, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { useSectionParam, filterSection, sectionSetter, secStamp } from '@/lib/sectionStore';
+import { useSectionParam, filterSection, sectionSetter, secStamp, MAIN_SEC } from '@/lib/sectionStore';
+import { useMenuSettings } from '@/lib/menuStore';
+import { useMembers } from '@/lib/members';
+import { canAddTrpg, trpgEditorIds, sameIds } from '@/lib/trpgPerm';
 import { useLocalList, newId } from '@/lib/postStore';
 import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, decodeLogText, logNo, saveLogBody } from '@/lib/galleryStore';
 import { Relation, REL_SEED } from '@/lib/charStore';
@@ -28,7 +31,7 @@ function TrpgPageInner() {
   const { user, isAdmin } = useAuth();
   const toast = useToast();
   const [site] = useSiteSettings(); // 티켓 하단 문구 = 로고 서브타이틀 (5.2 연동)
-  const [logsAll, setLogsAll] = useLocalList<TrpgLog>('ohome.trpg.v1', TRPG_SEED);
+  const [logsAll, setLogsAll, logsLoaded] = useLocalList<TrpgLog>('ohome.trpg.v1', TRPG_SEED);
   // 여러 개로 만든 섹션 (v2.0) — 주소의 ?s= 가 가리키는 것만 보여 준다
   const sec = useSectionParam('trpg');
   const logs = filterSection(logsAll, sec.id);
@@ -36,8 +39,28 @@ function TrpgPageInner() {
   const setLogs = sectionSetter(logsAll, sec.id, setLogsAll);
   // 본문은 목록과 분리 저장 (v2.0) — 나만보기 로그도 목록엔 뜨게 하려고 목록 문서의 질의 조건이
   // listHidden으로 느슨해졌는데, 본문까지 같이 있으면 그 질의로 본문도 함께 새어 나간다
-  const [bodies, setBodies] = useLocalList<TrpgLogBody>('ohome.trpgbody.v1', TRPG_BODY_SEED);
+  const [bodies, setBodies, bodiesLoaded] = useLocalList<TrpgLogBody>('ohome.trpgbody.v1', TRPG_BODY_SEED);
   const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
+  // 등록 권한 (커플홈 사용자 요청 — "등록 권한은 멤버에게도"): 환경설정 > 권한의 RP LOG 「등록」(기본 가입자)
+  const [menuSet, , menuLoaded] = useMenuSettings();
+  const members = useMembers();
+  const canAdd = canAddTrpg(menuSet, sec.id, { loggedIn: !!user, isAdmin, id: user?.id });
+  /* 수정 가능 회원 채우기 — 서버 규칙은 문서에 적힌 editorIds만 보므로, 관리자가 이 페이지를 열 때 「지금 등록 권한이
+     있는 회원」 목록을 옛 로그·본문에도 적어 둔다(이미 맞으면 아무것도 안 쓴다 — diffList가 바뀐 문서만 보낸다).
+     회원이 등록할 수 있게 되기 전의 로그는 전부 관리자 것이므로 등록자가 비어 있으면 관리자로 적는다 */
+  useEffect(() => {
+    if (!isAdmin || !user || !logsLoaded || !bodiesLoaded || !menuLoaded || !members.length) return;
+    const nl = logsAll.map(l => {
+      const w = trpgEditorIds(menuSet, l.secId ?? MAIN_SEC, members);
+      return sameIds(l.editorIds, w) && l.authorId ? l : { ...l, authorId: l.authorId ?? user.id, editorIds: w };
+    });
+    const nb = bodies.map(b => {
+      const w = trpgEditorIds(menuSet, b.secId ?? MAIN_SEC, members);
+      return sameIds(b.editorIds, w) && b.authorId ? b : { ...b, authorId: b.authorId ?? user.id, editorIds: w };
+    });
+    if (nl.some((l, i) => l !== logsAll[i])) setLogsAll(nl);
+    if (nb.some((b, i) => b !== bodies[i])) setBodies(nb);
+  }, [isAdmin, user, logsLoaded, bodiesLoaded, menuLoaded, members, menuSet, logsAll, bodies, setLogsAll, setBodies]);
   const { editOn } = useMainStore();          // 편집모드 — 상단바 토글 (다른 목록과 공통)
   const [filter, setFilter] = useState<string>('all');
   const [dcOpen, setDcOpen] = useState(false);   // 디스코드 가져오기 모달 (커플홈)
@@ -96,7 +119,8 @@ function TrpgPageInner() {
   // 목록에 뜰지는 오직 listHidden — 접근권한(visibility)은 "누가 열 수 있는지"만 정하고
   // 목록에 나오는지는 정하지 않는다 (v2.0 사용자 확정: "나만보기여도 목록에는 표시돼야해").
   // 열 수 있는지는 상세 페이지가 다시 독립적으로 확인하므로, 목록에 뜬다고 내용이 새지 않는다
-  const canOpen = (l: TrpgLog) => isAdmin || l.visibility === 'public' || (l.visibility === 'member' && !!user);
+  const canOpen = (l: TrpgLog) => isAdmin || l.visibility === 'public' || (l.visibility === 'member' && !!user)
+    || (!!user && l.authorId === user.id);   // 내가 등록한 나만보기 로그 (커플홈)
   const visible = logs
     // 목록 숨김 — 관리자도 편집모드가 아니면 안 보인다(목록을 정리해 두는 용도라, v2.0 사용자 요청).
     // 편집모드에서는 관리자에게만 예외로 보여 되돌릴 수 있게 한다
@@ -215,6 +239,9 @@ function TrpgPageInner() {
       thumbId: nThumb ? await putBlob(nThumb) : undefined,
       thumbCrop: nThumb ? nThumbCrop : undefined,
       thumbColor: nThumb ? undefined : { c1: nC1, c2: nColorMode === 'grad' ? nC2 : undefined },
+      // 등록자 · 수정 가능 회원(등록 권한이 있는 회원 전원 — trpgPerm.ts)
+      authorId: user?.id,
+      editorIds: trpgEditorIds(menuSet, sec.id, members),
     };
     // 본문·원본 파일은 별도 문서로 (v2.0) — 목록 문서(log)와 같은 곳에 있으면 나만보기여도
     // 목록에 뜨는 순간 함께 새어 나간다. 이 문서의 열람 권한은 로그의 실제 visibility를 그대로 따른다
@@ -225,6 +252,8 @@ function TrpgPageInner() {
       // 업로드 원본 파일은 그대로 보관 (4.3 — 백업 목적, IndexedDB → R2 이전 예정)
       originalFileId: nFile ? await putBlob(nFile) : undefined,
       originalName: nFile?.name,
+      authorId: user?.id,
+      editorIds: log.editorIds,
       visibility: bodyVisibility(log),
       ...secStamp(sec.id),   // 소속 (v2.0) — 본문 문서도 비공개 판정을 받게
     };
@@ -285,8 +314,8 @@ function TrpgPageInner() {
         <div className="head-actions">
           <SearchBar onSearch={setQ} />
           {/* 디스코드 복사본 가져오기 (커플홈 사용자 요청) — 붙여 넣기/txt → 발화자 매칭 → 역극 모양 로그 */}
-          {isAdmin && <button className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => setDcOpen(true)}>디스코드 가져오기</button>}
-          {isAdmin && <button className="btn btn-dark" style={{ whiteSpace: 'nowrap' }} onClick={() => setAddOpen(true)}>＋ ADD LOG</button>}
+          {canAdd && <button className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => setDcOpen(true)}>디스코드 가져오기</button>}
+          {canAdd && <button className="btn btn-dark" style={{ whiteSpace: 'nowrap' }} onClick={() => setAddOpen(true)}>＋ ADD LOG</button>}
         </div>
       </div>
       <div className="trpg-layout">

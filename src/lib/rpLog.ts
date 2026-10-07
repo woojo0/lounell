@@ -22,7 +22,28 @@ export interface RpLogOpts {
   faces?: Record<string, { url: string; style: string }>;
   /** 좌우를 정하지 않고 캐릭터 id만 적어 둔다 (RP LOG 게시판용) — 보는 사람에 따라 상세 페이지가 applyLogSides로 정한다 */
   neutralSides?: boolean;
+  /** 머리의 기간·대화 수 줄을 빼고 이름과 내용만 (커플홈 사용자 요청 — 디스코드 가져오기: "시간 같은 건 안 남겼으면") */
+  noMeta?: boolean;
 }
+
+/** 역극 모양 로그의 원본 발화 (커플홈 사용자 요청 — "등록한 다음에 편집모드를 켜서 내용도 수정").
+ *  본문(HTML/텍스트)과 함께 RP LOG 본문 문서(TrpgLogBody.src)에 두면, 상세의 「본문 편집」이 발화를 고친 뒤
+ *  같은 모양으로 다시 그린다(rpLogSrc.ts) — 생성된 HTML을 되읽는 대신 원본을 들고 있는 편이 확실하다 */
+export interface RpLogSrc {
+  msgs: RpMessage[];
+  style: 'script' | 'imsg';
+  fmt: 'html' | 'text';
+  /** 프로필 사진 넣기 (메신저 모양·HTML일 때) */
+  faces: boolean;
+  /** 시각 표시 */
+  time: boolean;
+  /** 머리의 기간·대화 수 줄 생략 */
+  noMeta?: boolean;
+}
+
+/** 원본 발화를 본문 문서에 함께 둘 수 있는 크기 — Firestore 문서 상한(1MB) 안쪽. 넘으면 원본 없이 본문만 (그 로그는 글로만 고친다) */
+export const RP_SRC_MAX = 400_000;
+export const rpLogSrcFits = (src: RpLogSrc) => JSON.stringify(src).length <= RP_SRC_MAX;
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const ymd = (iso: string) => {
@@ -68,7 +89,7 @@ const nameOf = (chars: Character[], id?: string) =>
 export function rpLogText(info: RpLogInfo, msgs: RpMessage[], chars: Character[], opts: RpLogOpts): string {
   const head = [
     ...(opts.forBoard ? [] : [info.title, ...(info.sub ? [info.sub] : [])]),
-    [rpLogRange(msgs), `대화 ${msgs.length}개`].filter(Boolean).join(' · '),
+    ...(opts.noMeta ? [] : [[rpLogRange(msgs), `대화 ${msgs.length}개`].filter(Boolean).join(' · ')]),
     '─'.repeat(28),
   ];
   const body: string[] = [];
@@ -181,7 +202,8 @@ body{margin:0;background:#f2f2f7;color:#111;font-family:-apple-system,'Pretendar
  *  메신저 모양(opts.style 'imsg')은 아이폰 문자 말풍선 — 역극 페이지에서 보던 그대로 */
 export function rpLogHtml(info: RpLogInfo, msgs: RpMessage[], chars: Character[], opts: RpLogOpts): string {
   if (opts.style === 'imsg') {
-    const meta = [rpLogRange(msgs), `대화 ${msgs.length}개`].filter(Boolean).join(' · ');
+    const meta = opts.noMeta ? '' : [rpLogRange(msgs), `대화 ${msgs.length}개`].filter(Boolean).join(' · ');
+    const hdIn = `${opts.forBoard ? '' : `<h1>${esc(info.title)}</h1>${info.sub ? `<div class="sub">${esc(info.sub)}</div>` : ''}`}${meta ? `<div class="meta">${esc(meta)}</div>` : ''}`;
     return `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -192,7 +214,7 @@ export function rpLogHtml(info: RpLogInfo, msgs: RpMessage[], chars: Character[]
 </head>
 <body>
 <div class="log">
-<div class="hd">${opts.forBoard ? '' : `<h1>${esc(info.title)}</h1>${info.sub ? `<div class="sub">${esc(info.sub)}</div>` : ''}`}${meta ? `<div class="meta">${esc(meta)}</div>` : ''}</div>
+${hdIn ? `<div class="hd">${hdIn}</div>` : ''}
 <div class="chat">
 ${imsgRows(msgs, chars, opts).join('\n')}
 </div>
@@ -217,7 +239,8 @@ ${imsgRows(msgs, chars, opts).join('\n')}
       rows.push(`<div class="d">${t}${esc(m.text || (m.imgId ? '[사진]' : ''))}</div>`);
     }
   }
-  const meta = [rpLogRange(msgs), `대화 ${msgs.length}개`].filter(Boolean).join(' · ');
+  const meta = opts.noMeta ? '' : [rpLogRange(msgs), `대화 ${msgs.length}개`].filter(Boolean).join(' · ');
+  const hdIn = `${opts.forBoard ? '' : `<h1>${esc(info.title)}</h1>${info.sub ? `<div class="sub">${esc(info.sub)}</div>` : ''}`}${meta ? `<div class="meta">${esc(meta)}</div>` : ''}`;
   return `<!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -242,7 +265,7 @@ body{margin:0;background:#f7f7f5;color:#2a2d33;font-family:'Pretendard','Noto Sa
 </head>
 <body>
 <div class="log">
-<div class="hd">${opts.forBoard ? '' : `<h1>${esc(info.title)}</h1>${info.sub ? `<div class="sub">${esc(info.sub)}</div>` : ''}`}${meta ? `<div class="meta">${esc(meta)}</div>` : ''}</div>
+${hdIn ? `<div class="hd">${hdIn}</div>` : ''}
 ${rows.join('\n')}
 </div>
 </body>

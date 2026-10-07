@@ -5,7 +5,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RpRoom, RpMessage } from '@/lib/rpStore';
 import type { Character, Visibility } from '@/lib/charStore';
-import { rpLogText, rpLogHtml, rpLogRange, rpLogLastDate, rpSpeakers, logFileName, downloadText, openLogWindow } from '@/lib/rpLog';
+import { rpLogText, rpLogHtml, rpLogRange, rpLogLastDate, rpSpeakers, logFileName, downloadText, openLogWindow, rpLogSrcFits, type RpLogSrc } from '@/lib/rpLog';
+import { useAuth } from '@/lib/auth';
+import { useMenuSettings } from '@/lib/menuStore';
+import { useMembers } from '@/lib/members';
+import { trpgEditorIds } from '@/lib/trpgPerm';
 import { useLocalList, newId } from '@/lib/postStore';
 import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, saveLogBody } from '@/lib/galleryStore';
 import { useSections, filterSection, secStamp, MAIN_SEC } from '@/lib/sectionStore';
@@ -130,6 +134,9 @@ function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds, faces, face
   const [bodies, setBodies, bodiesLoaded] = useLocalList<TrpgLogBody>('ohome.trpgbody.v1', TRPG_BODY_SEED);
   const { list } = useSections();
   const secs = list('trpg');   // RP LOG를 여러 개로 만들었으면 어디에 올릴지 고른다
+  const { user } = useAuth();
+  const [menuSet] = useMenuSettings();
+  const members = useMembers();   // 등록 권한이 있는 회원 = 수정 가능 (trpgEditorIds)
 
   const [title, setTitle] = useState(room.title);
   const [catchphrase, setCatchphrase] = useState('');
@@ -154,6 +161,9 @@ function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds, faces, face
         // 게시판 본문은 좌우를 정하지 않는다 — 보는 사람에 따라 상세 페이지가 정한다 (커플홈 사용자 요청)
         ? rpLogHtml(info, msgs, chars, { time, forBoard: true, style, rightIds, faces, neutralSides: true })
         : rpLogText(info, msgs, chars, { time, forBoard: true });
+      // 원본 발화도 함께 — 올린 뒤 상세의 「본문 편집」에서 발화를 고치고 같은 모양으로 다시 그릴 수 있게 (커플홈 사용자 요청)
+      const src: RpLogSrc = { msgs, style, fmt, faces: !!faces, time };
+      const editorIds = trpgEditorIds(menuSet, secId, members);
       const log: TrpgLog = {
         id,
         no: Math.max(0, ...filterSection(logsAll, secId).map(l => l.no)) + 1,   // 그 게시판 안의 순번
@@ -171,6 +181,8 @@ function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds, faces, face
         thumbColor: colors.length
           ? { c1: colors[0], c2: colors[1] }
           : { c1: '#4c5a6e', c2: '#242b36' },
+        authorId: user?.id,
+        editorIds,
         ...secStamp(secId),
       };
       // 본문은 목록과 분리 저장 — RP LOG 페이지의 등록과 같은 방식 (본문 문서는 뒤에 붙인다)
@@ -178,6 +190,9 @@ function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds, faces, face
         id,
         ...(await saveLogBody(bodyText)),
         bodyHtml: fmt === 'html',
+        src: rpLogSrcFits(src) ? src : undefined,
+        authorId: user?.id,
+        editorIds,
         visibility: bodyVisibility(log),
         ...secStamp(secId),
       };

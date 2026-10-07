@@ -5,13 +5,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useLocalList, newId } from '@/lib/postStore';
-import { Character, CHAR_SEED, Relation, REL_SEED, charInAu, faceCropOf, pairSides, type Visibility } from '@/lib/charStore';
+import { Character, CHAR_SEED, Relation, REL_SEED, type Visibility } from '@/lib/charStore';
 import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, saveLogBody } from '@/lib/galleryStore';
 import { useSections, filterSection, secStamp, MAIN_SEC } from '@/lib/sectionStore';
 import { parseDiscordLog, dcToMessages, guessChar, type DcMap } from '@/lib/discordLog';
-import { rpLogHtml, rpLogText, rpLogRange, rpLogLastDate, rpSpeakers } from '@/lib/rpLog';
+import { rpLogRange, rpLogLastDate, rpLogSrcFits, type RpLogSrc } from '@/lib/rpLog';
 import type { RpMessage } from '@/lib/rpStore';
-import { resolveFaces, type FaceInfo } from '@/components/rp/RpLogModal';
+import { renderLogSrc, logViewChars } from '@/lib/rpLogSrc';
+import { useAuth } from '@/lib/auth';
+import { useMenuSettings } from '@/lib/menuStore';
+import { useMembers } from '@/lib/members';
+import { trpgEditorIds } from '@/lib/trpgPerm';
 import { Modal } from '@/components/ui/Modal';
 import { KInput, KTextarea, KSelect, KCheck } from '@/components/ui/Kit';
 import { useToast } from '@/components/ui/Toast';
@@ -22,6 +26,9 @@ const DESC = '__desc', SKIP = '__skip';
 export function DiscordImportModal({ onClose, initialSecId = MAIN_SEC }: { onClose: () => void; initialSecId?: string }) {
   const router = useRouter();
   const toast = useToast();
+  const { user } = useAuth();
+  const [menuSet] = useMenuSettings();
+  const members = useMembers();   // 등록 권한이 있는 회원 = 수정 가능 (trpgEditorIds)
   const [chars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
   const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
   const [logsAll, setLogsAll, logsLoaded] = useLocalList<TrpgLog>('ohome.trpg.v1', TRPG_SEED);
@@ -39,15 +46,9 @@ export function DiscordImportModal({ onClose, initialSecId = MAIN_SEC }: { onClo
   useEffect(() => { if (!relId && rels[0]) setRelId(rels[0].id); }, [rels, relId]);
   const rel = rels.find(r => r.id === relId);
   const [auId, setAuId] = useState('base');
-  const auKey = rel && auId !== 'base' ? `${rel.id}:${auId}` : undefined;
+  const logAuId = auId !== 'base' ? auId : undefined;
   // 자관 멤버(AU를 골랐으면 그 AU 모습·이름)를 먼저, 그 밖의 캐릭터는 뒤에 — 새로 추가한 캐릭터도 여기서 고른다
-  const { members, others, viewChars } = useMemo(() => {
-    const ids = rel ? (pairSides(rel) ?? rel.members.map(m => m.charId)) : [];
-    const view = (c: Character) => (auKey ? charInAu(c, rels, auKey) : c);
-    const members = ids.map(id => chars.find(c => c.id === id)).filter((c): c is Character => !!c).map(view);
-    const others = chars.filter(c => !ids.includes(c.id)).map(view);
-    return { members, others, viewChars: chars.map(view) };
-  }, [rel, auKey, chars, rels]);
+  const { members: relChars, others } = useMemo(() => logViewChars(chars, rels, relId, logAuId), [chars, rels, relId, logAuId]);
 
   // 3) 발화자 매칭 — 발화자 목록·자관이 바뀌면 아직 안 정한 것만 자동으로 채운다 (이름이 같은 캐릭터, 「-」는 지문)
   const [map, setMap] = useState<DcMap>({});
@@ -57,12 +58,12 @@ export function DiscordImportModal({ onClose, initialSecId = MAIN_SEC }: { onClo
       for (const s of parsed.speakers) {
         if (next[s.name]) continue;
         if (s.name.trim() === '-') { next[s.name] = { kind: 'desc' }; continue; }
-        const g = guessChar(s.name, [...members, ...others]);
+        const g = guessChar(s.name, [...relChars, ...others]);
         if (g) next[s.name] = { kind: 'char', charId: g.id };
       }
       return next;
     });
-  }, [parsed, members, others]);
+  }, [parsed, relChars, others]);
   const unmapped = parsed.speakers.filter(s => !map[s.name]);
   const msgs = useMemo(() => dcToMessages(parsed, map), [parsed, map]);
   const mapValue = (name: string) => { const m = map[name]; return !m ? '' : m.kind === 'char' ? m.charId : m.kind === 'desc' ? DESC : SKIP; };
@@ -71,7 +72,6 @@ export function DiscordImportModal({ onClose, initialSecId = MAIN_SEC }: { onClo
 
   // 4) 모양·올리기
   const [style, setStyle] = useState<'script' | 'imsg'>('imsg');
-  const [time, setTime] = useState(false);
   const [withFaces, setWithFaces] = useState(true);
   const [fmt, setFmt] = useState<'html' | 'text'>('html');
   const [title, setTitle] = useState('');
@@ -82,8 +82,7 @@ export function DiscordImportModal({ onClose, initialSecId = MAIN_SEC }: { onClo
   const [postedId, setPostedId] = useState<string | null>(null);
   const ready = logsLoaded && bodiesLoaded;
 
-  const speakerChars = useMemo(() => rpSpeakers(msgs, viewChars), [msgs, viewChars]);
-  const defaultTitle = `${rel?.name ?? '역극'} 로그${msgs.length ? ` · ${rpLogRange(msgs)}` : ''}`;
+  const defaultTitle = `${rel?.name ?? '역극'} 로그`;   // 기간 같은 시각 정보는 제목에도 안 남긴다 (사용자 확정)
 
   const pickFile = async (f: File | undefined) => {
     if (!f) return;
@@ -98,34 +97,37 @@ export function DiscordImportModal({ onClose, initialSecId = MAIN_SEC }: { onClo
     setBusy(true);
     try {
       const id = newId();
-      // 프로필 사진 — 자관에서 잡아 둔 얼굴 위치 그대로 (AU면 그 AU의 사진·위치)
-      const faceInfo: FaceInfo = Object.fromEntries(viewChars.map(c => [c.id, { ref: c.thumbId, crop: faceCropOf(c, rels, { relId: rel?.id, auKey }) }]));
-      const faces = fmt === 'html' && style === 'imsg' && withFaces ? await resolveFaces(speakerChars, faceInfo) : undefined;
-      const info = { title: t, sub: speakerChars.map(c => c.name).join(' · ') };
-      const bodyText = fmt === 'html'
-        ? rpLogHtml(info, msgs, viewChars, { time, forBoard: true, style, rightIds: [], faces, neutralSides: true })
-        : rpLogText(info, msgs, viewChars, { time, forBoard: true });
-      const colors = speakerChars.map(c => c.color).filter(isHex);
+      // 원본 발화도 함께 저장 — 올린 뒤 상세의 「본문 편집」에서 발화를 고치고 같은 모양으로 다시 그릴 수 있게 (사용자 요청).
+      // 시각은 어디에도 남기지 않는다 — 이름과 내용만 (사용자 확정: "시간 같은 건 안 남겼으면")
+      const src: RpLogSrc = { msgs, style, fmt, faces: withFaces, time: false, noMeta: true };
+      const { bodyText, speakers } = await renderLogSrc(src, t, chars, rels, rel?.id, rel ? logAuId : undefined);
+      const colors = speakers.map(c => c.color).filter(isHex);
+      const editorIds = trpgEditorIds(menuSet, secId, members);   // 등록 권한이 있는 회원 = 수정 가능
       const log: TrpgLog = {
         id,
         no: Math.max(0, ...filterSection(logsAll, secId).map(l => l.no)) + 1,
         title: t,
         catchphrase: catchphrase.trim() || undefined,
         writer: '',
-        withText: speakerChars.map(c => c.name).join(' · '),
+        withText: speakers.map(c => c.name).join(' · '),
         relId: rel?.id,
-        auId: rel && auId !== 'base' ? auId : undefined,
+        auId: rel ? logAuId : undefined,
         date: rpLogLastDate(msgs),
         ph: 'cool',
         visibility: vis,
         listHidden: false,
         thumbColor: colors.length ? { c1: colors[0], c2: colors[1] } : { c1: '#4c5a6e', c2: '#242b36' },
+        authorId: user?.id,
+        editorIds,
         ...secStamp(secId),
       };
       const body: TrpgLogBody = {
         id,
         ...(await saveLogBody(bodyText)),
         bodyHtml: fmt === 'html',
+        src: rpLogSrcFits(src) ? src : undefined,
+        authorId: user?.id,
+        editorIds,
         visibility: bodyVisibility(log),
         ...secStamp(secId),
       };
@@ -140,7 +142,7 @@ export function DiscordImportModal({ onClose, initialSecId = MAIN_SEC }: { onClo
 
   const charOptions = [
     { value: '', label: '선택…' },
-    ...members.map(c => ({ value: c.id, label: c.name })),
+    ...relChars.map(c => ({ value: c.id, label: c.name })),
     ...others.map(c => ({ value: c.id, label: `그 밖 · ${c.name}` })),
     { value: DESC, label: '지문(서술)으로' },
     { value: SKIP, label: '제외' },
@@ -209,10 +211,9 @@ export function DiscordImportModal({ onClose, initialSecId = MAIN_SEC }: { onClo
                 <button className={fmt === 'text' ? 'on' : ''} onClick={() => setFmt('text')}>텍스트</button>
               </div>
               {fmt === 'html' && style === 'imsg' && <KCheck label="프로필 사진" checked={withFaces} onChange={setWithFaces} />}
-              <KCheck label="시각 표시" checked={time} onChange={setTime} />
             </div>
             <p className="hint" style={{ margin: 0 }}>
-              매칭된 캐릭터의 사진·이름·테마색이 그대로 들어갑니다. 메신저 모양의 좌우는 보는 사람 기준 — 관리자에게는 자캐가, 참여 회원에게는 자기 캐릭터가 오른쪽.
+              매칭된 캐릭터의 사진·이름·테마색이 그대로 들어가고, 시각·날짜는 남기지 않습니다(이름과 내용만). 메신저 모양의 좌우는 보는 사람 기준 — 관리자에게는 자캐가, 참여 회원에게는 자기 캐릭터가 오른쪽. 올린 뒤에도 로그 페이지의 「본문 편집」으로 발화를 고칠 수 있습니다.
             </p>
             {/* 제목·공개 */}
             <KInput placeholder={`제목 (비우면 「${defaultTitle}」)`} value={title} onChange={e => setTitle(e.target.value)} />

@@ -2322,7 +2322,7 @@ function MenuPane() {
   );
   /* 게시판 글쓰기 권한 (커플홈 사용자 요청 — 갤러리에만 있던 「가입자/관리자 + 글쓰기 멤버」를 모든 게시판에).
      값은 게시판마다 다른 곳에 산다 — 리스트는 게시판 설정 permWrite, 로드비 기본 페이지는 roadUpload,
-     나머지(Videos·감상타래·캐릭터·도토리·플레이기록·추가 로드비)는 메뉴 설정 writePerm[키] — 멤버 선택은 전부 writeMembers[키] */
+     나머지(Videos·감상타래·캐릭터·도토리·플레이기록·RP LOG·추가 로드비)는 메뉴 설정 writePerm[키] — 멤버 선택은 전부 writeMembers[키] */
   const setWriteMembers = (key: string, n: string[]) => {
     const next = { ...ms.writeMembers };
     if (n.length) next[key] = n; else delete next[key];
@@ -2372,13 +2372,13 @@ function MenuPane() {
     }
     const def: MenuPerm | null =
       path === '/tchars' || path === '/playlog' ? 'admin'
-      : path === '/videos' || path === '/threads' || path === '/dotori' ? 'member'
+      : path === '/videos' || path === '/threads' || path === '/dotori' || path === '/trpg' ? 'member'   // RP LOG — 등록 권한이 있는 회원은 수정도 (trpgPerm.ts)
       // 추가 로드비 — 기본 페이지의 공통값(roadUpload)을 따르되 따로 정할 수 있다 (기본 페이지는 아래 /loadb 가지에서)
       : path === '/loadb' && secId !== MAIN_SEC ? (ms.roadUpload === 'admin' ? 'admin' : 'member')
       : null;
     if (def === null) return null;
     const key = writeKeyOf(path, secId);
-    const what = path === '/loadb' ? '업로드' : path === '/tchars' || path === '/playlog' || path === '/dotori' ? '등록' : '글쓰기';
+    const what = path === '/loadb' ? '업로드' : path === '/tchars' || path === '/playlog' || path === '/dotori' || path === '/trpg' ? '등록' : '글쓰기';
     return { key, perm: ms.writePerm?.[key] ?? def, what };
   };
 
@@ -2484,7 +2484,7 @@ function MenuPane() {
         </>
       );
     }
-    // 그 밖의 게시판 (Videos·감상타래·캐릭터·도토리·플레이기록·추가 로드비) — 메뉴 설정 writePerm (커플홈 사용자 요청)
+    // 그 밖의 게시판 (Videos·감상타래·캐릭터·도토리·플레이기록·RP LOG·추가 로드비) — 메뉴 설정 writePerm (커플홈 사용자 요청)
     const wp = writePermOf(href);
     if (wp) return writePermUI(wp.key, wp.perm, v => patch({ writePerm: { ...ms.writePerm, [wp.key]: v } }), wp.what);
     return null;

@@ -1749,6 +1749,16 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 /* 역극 로그 미리보기 (커플홈) — 로그 모달 안, 길면 안에서 스크롤 */
 .rp-log-pre{margin:0;max-height:240px;overflow:auto;padding:12px 14px;border:1.5px solid var(--line);border-radius:9px;background:rgba(127,127,127,.06);white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,Consolas,monospace;font-size:calc(11.5px*var(--fs,1));line-height:1.7;color:var(--text,inherit)}
 .log-plain{white-space:pre-wrap;font-size:calc(13px*var(--fs,1));line-height:1.8;color:#2c3037;font-family:var(--sans)}
+/* RP LOG 본문 편집 (커플홈 사용자 요청 — 등록한 뒤에도 발화를 고칠 수 있게): 줄마다 발화자·내용·추가/삭제 */
+.lsrc-wrap{display:grid;gap:12px}
+.lsrc-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.lsrc{display:grid;gap:4px}
+.lsrc-row{display:grid;grid-template-columns:150px 1fr auto;gap:8px;align-items:start;padding:6px 0;border-bottom:1px dashed var(--line)}
+.lsrc-row .k-textarea{min-height:38px;font-size:calc(12.5px*var(--fs,1));line-height:1.6;resize:none}
+.lsrc-act{display:flex;flex-direction:column;gap:4px}
+.lsrc-act button{width:26px;height:26px;border-radius:7px;border:1px solid var(--line);background:#fff;color:var(--faint);font-size:12px;line-height:1;transition:.13s}
+.lsrc-act button:hover{border-color:color-mix(in srgb,var(--accent) 55%,var(--line));color:var(--accent);background:color-mix(in srgb,var(--accent) 7%,#fff)}
+@media (max-width:620px){.lsrc-row{grid-template-columns:1fr auto}.lsrc-row .k-textarea{grid-column:1/-1}}
 
 /* ---------- 게시판 공통 (4.2) ---------- */
 .toolrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap}

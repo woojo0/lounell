@@ -9,7 +9,12 @@ import { useAuth } from '@/lib/auth';
 import { useLocalList } from '@/lib/postStore';
 import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, showAsHtml, decodeLogText, logNo, saveLogBody } from '@/lib/galleryStore';
 import { Relation, REL_SEED, Character, CHAR_SEED, charGrant } from '@/lib/charStore';
-import { applyLogSides } from '@/lib/rpLog';
+import { applyLogSides, rpSpeakers, type RpLogSrc } from '@/lib/rpLog';
+import { useMenuSettings } from '@/lib/menuStore';
+import { useMembers } from '@/lib/members';
+import { canEditTrpg, trpgEditorIds } from '@/lib/trpgPerm';
+import { logViewChars, renderLogSrc } from '@/lib/rpLogSrc';
+import { LogSrcEditor } from '@/components/rp/LogSrcEditor';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { getBlob, putBlob, useBlobUrl } from '@/lib/blobStore';
 import { PageTitle, EditableDesc } from '@/components/ui/PageText';
@@ -51,6 +56,9 @@ export default function TrpgDetailPage() {
   const [bodies, setBodies] = useLocalList<TrpgLogBody>('ohome.trpgbody.v1', TRPG_BODY_SEED);
   const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
   const [allChars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
+  // 수정 권한 (커플홈 사용자 요청 — "수정 권한은 멤버에게도"): 관리자 · 등록한 본인 · 등록 권한이 있는 회원(editorIds, trpgPerm.ts)
+  const [menuSet] = useMenuSettings();
+  const members = useMembers();
   const [delAsk, setDelAsk] = useState(false);
   const [bodyText, setBodyText] = useState<string | null>(null);
   const frameRef = useRef<HTMLIFrameElement>(null);
@@ -73,7 +81,8 @@ export default function TrpgDetailPage() {
     return ch ? !!charGrant(ch, user.id) : false;
   });
   const baseAllowed = !!l && (isAdmin || isRelPartner
-    || l.visibility === 'public' || (l.visibility === 'member' && !!user));
+    || l.visibility === 'public' || (l.visibility === 'member' && !!user)
+    || (!!user && l.authorId === user.id));   // 내가 등록한 로그 (커플홈 — 회원도 등록한다)
 
   // 비밀번호 열람 (4.3) — 세션 동안 유지
   const [unlocked, setUnlocked] = useState(false);
@@ -125,6 +134,52 @@ export default function TrpgDetailPage() {
   const [eC1, setEC1] = useState('#4c5a6e');
   const [eC2, setEC2] = useState('#242b36');
 
+  // 본문 편집 모드 (커플홈 사용자 요청 — "등록한 다음에 편집모드를 켜서 내용도 수정") —
+  // 원본 발화(src)가 있는 역극 모양 로그는 발화 단위로 고치고 같은 모양으로 다시 그린다. 없으면 본문 글을 그대로 고친다
+  const [editing, setEditing] = useState(false);
+  const [eSrc, setESrc] = useState<RpLogSrc | null>(null);
+  const [eBody, setEBody] = useState('');
+  const [saving, setSaving] = useState(false);
+  const startBodyEdit = () => {
+    if (bd?.src) setESrc(bd.src);
+    else { setESrc(null); setEBody(bodyText ?? ''); }
+    setEditing(true);
+  };
+  const saveBodyEdit = async () => {
+    if (!l || saving) return;
+    setSaving(true);
+    try {
+      let patch: Partial<TrpgLogBody>;
+      const logPatch: Partial<TrpgLog> = {};
+      if (eSrc) {
+        if (!eSrc.msgs.length) { toast('발화가 하나도 없습니다 — 한 줄은 남겨 주세요'); return; }
+        const r = await renderLogSrc(eSrc, l.title, allChars, rels, l.relId, l.auId);
+        patch = { ...(await saveLogBody(r.bodyText)), bodyHtml: eSrc.fmt === 'html', src: eSrc };
+        // 「동행」 칸이 자동값(말한 캐릭터 이름)이었으면 바뀐 발화자에 맞춘다 — 직접 고쳐 둔 것은 그대로
+        const prevAuto = bd?.src
+          ? rpSpeakers(bd.src.msgs, logViewChars(allChars, rels, l.relId, l.auId).viewChars).map(c => c.name).join(' · ')
+          : undefined;
+        if (!l.withText || l.withText === prevAuto) logPatch.withText = r.withText;
+      } else {
+        patch = { ...(await saveLogBody(eBody)) };
+      }
+      const editorIds = trpgEditorIds(menuSet, l.secId ?? MAIN_SEC, members, l.editorIds);
+      const nextBody: TrpgLogBody = {
+        id, ...bd, body: '', bodyId: undefined, ...patch,
+        authorId: bd?.authorId ?? l.authorId, editorIds,
+        visibility: bodyVisibility(l), ...secStamp(l.secId ?? MAIN_SEC),
+      };
+      // 본문 문서는 뒤에 붙인다 (기존 본문들의 자리가 밀려 재저장되지 않게 — saveEdit와 같은 이유)
+      setBodies(bd ? bodies.map(x => x.id === id ? nextBody : x) : [...bodies, nextBody]);
+      setLogs(logs.map(x => x.id === id ? { ...x, ...logPatch, editorIds } : x));
+      setBodyText(null);   // 본문 다시 로드
+      setEditing(false);
+      toast('본문을 저장했습니다');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const saveEdit = async () => {
     if (!e.title.trim()) { toast('시나리오 타이틀을 입력해 주세요'); return; }
     // 본문 교체 준비 — 본문은 목록과 분리 저장이라(v2.0) 이제 TrpgLogBody 조각으로 만든다
@@ -158,6 +213,7 @@ export default function TrpgDetailPage() {
       date: e.date || undefined,
       visibility: e.visibility, password: e.password.trim() || undefined,
       listHidden: e.listHidden,
+      editorIds: trpgEditorIds(menuSet, l?.secId ?? MAIN_SEC, members, l?.editorIds),   // 등록 권한이 있는 회원 = 수정 가능 (저장할 때마다 최신으로)
       ...thumbPatch,
       // 예전엔 본문이 이 문서에 있었다 — 저장할 때마다 확실히 비워서(구버전 잔재 정리),
       // 나만보기 로그가 목록엔 뜨면서 본문까지 같이 새어 나가는 일이 없게 한다 (v2.0)
@@ -174,6 +230,10 @@ export default function TrpgDetailPage() {
       originalFileId: bd?.originalFileId ?? l?.originalFileId,
       originalName: bd?.originalName ?? l?.originalName,
       bodyHtml: bodyDisp === 'auto' ? undefined : bodyDisp === 'html',
+      // 원본 발화는 본문을 그대로 둘 때만 유지 — 파일·직접 입력으로 갈아 끼우면 더는 맞지 않는다
+      src: bodyMode === 'keep' ? bd?.src : undefined,
+      authorId: bd?.authorId ?? l?.authorId,
+      editorIds: nextLog.editorIds,
       ...bodyPatch,
       visibility: bodyVisibility(nextLog),
       ...secStamp(nextLog.secId ?? MAIN_SEC),   // 소속 (v2.0) — 본문 문서도 비공개 판정을 받게
@@ -257,6 +317,9 @@ export default function TrpgDetailPage() {
   }
 
   const rel = rels.find(r => r.id === l.relId);
+  const canEdit = canEditTrpg(l, { loggedIn: !!user, isAdmin, id: user?.id });
+  const canDelete = isAdmin || (!!user && l.authorId === user.id);   // 삭제는 본인과 관리자만
+  const srcChars = logViewChars(allChars, rels, l.relId, l.auId);   // 본문 편집의 발화자 목록 (자관 멤버 먼저)
   const body = bodyText ?? '';
   // 지정값이 있으면 그대로 — 직접 쓴 글이 태그처럼 보이는 문자 때문에 HTML로 오판되던 것 방지
   /* 메신저 모양 역극 로그의 좌우는 보는 사람 기준 (커플홈 사용자 요청) — 관리자는 자캐가 오른쪽, 역극 참여 회원은
@@ -337,7 +400,9 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
             const href = au ? `/rels/${rel.id}?au=${encodeURIComponent(au.slug?.trim() || au.id)}` : `/rels/${rel.id}`;
             return <button className="btn btn-dark" onClick={() => router.push(href)}>{au ? `${rel.name} · ${au.label || 'AU'}` : rel.name} ›</button>;
           })()}
-          {isAdmin && <button className="btn btn-dark" onClick={() => {
+          {/* 본문 편집 — 발화 단위(원본이 있을 때) 또는 본문 글 그대로 (커플홈 사용자 요청) */}
+          {canEdit && !editing && <button className="btn btn-ghost" onClick={startBodyEdit}>본문 편집</button>}
+          {canEdit && <button className="btn btn-dark" onClick={() => {
             setE({
               noText: l.noText ?? '', title: l.title, catchphrase: l.catchphrase ?? '', writer: l.writer,
               withText: l.withText, relId: l.relId ?? 'none', auId: l.auId ?? 'base', date: l.date ?? '',
@@ -353,7 +418,7 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
             if (l.thumbColor) { setEC1(l.thumbColor.c1); if (l.thumbColor.c2) setEC2(l.thumbColor.c2); }
             setEOpen(true);
           }}>EDIT</button>}
-          {isAdmin && <button className="btn btn-dark" onClick={() => setDelAsk(true)}>DELETE</button>}
+          {canDelete && <button className="btn btn-dark" onClick={() => setDelAsk(true)}>DELETE</button>}
         </div>
       </div>
 
@@ -368,7 +433,27 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
         {l.catchphrase && (
           <p style={{ fontSize: 11.5, color: 'var(--faint)', letterSpacing: '.14em', marginBottom: 16 }}>{l.catchphrase}</p>
         )}
-        {html ? (
+        {editing ? (
+          /* 본문 편집 모드 (커플홈) — 원본 발화가 있으면 줄 단위, 없으면 본문 글 그대로 */
+          <div className="lsrc-wrap">
+            <div className="lsrc-bar">
+              <button className="btn btn-dark" disabled={saving} onClick={saveBodyEdit}>{saving ? '저장 중…' : 'SAVE'}</button>
+              <button className="btn btn-ghost" disabled={saving} onClick={() => setEditing(false)}>CANCEL</button>
+              <small className="hint" style={{ margin: 0 }}>
+                {eSrc ? '발화자와 내용을 고치고 SAVE — 같은 모양으로 다시 그려집니다' : html ? 'HTML 원문을 그대로 고칩니다' : '본문을 그대로 고칩니다'}
+              </small>
+            </div>
+            {eSrc
+              ? <LogSrcEditor src={eSrc} onChange={setESrc} members={srcChars.members} others={srcChars.others} />
+              : <KTextarea value={eBody} onChange={ev => setEBody(ev.target.value)}
+                  style={{ minHeight: 320, ...(html ? { fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 12 } : {}) }} />}
+            {eSrc && (
+              <div className="lsrc-bar">
+                <button className="btn btn-dark" disabled={saving} onClick={saveBodyEdit}>{saving ? '저장 중…' : 'SAVE'}</button>
+              </div>
+            )}
+          </div>
+        ) : html ? (
           /* 원본 스타일·스크립트 유지 — 널 오리진 샌드박스라 사이트 데이터에는 접근 불가 (6.3 격리) */
           <LogFrame frameRef={frameRef} html={srcDoc} title={l.title} onFrameLoad={onFrameLoad} />
         ) : (

@@ -4,6 +4,7 @@ import type { Comment, FoldType } from './postStore';
 import type { CropValue } from '@/components/ui/CropEditor';
 import type { Visibility } from './charStore';
 import { getRawSetting, setSetting } from './settingStore';
+import type { RpLogSrc } from './rpLog';
 
 /* ---------- 로드뷰 (4.10) ---------- */
 export interface RoadItem {
@@ -79,6 +80,11 @@ export interface TrpgLog {
   // 스위치. 나만보기(private)여도 이걸 켜지 않으면 관리자 목록에서 사라지지 않는다 — 반대로 이걸 켜면
   // 전체공개여도 목록에서만 빠지고 직접 링크로는 그대로 열린다. 관리자는 편집모드에서 숨김 표시로 계속 본다
   listHidden?: boolean;
+  /** 등록한 회원 (커플홈 — 회원도 등록할 수 있게 되면서). 없는 옛 로그는 관리자 것. 삭제는 본인과 관리자 */
+  authorId?: string;
+  /** 수정할 수 있는 회원 — 이 게시판에 등록 권한이 있는 회원 전원을 저장할 때마다 적는다 (trpgPerm.ts trpgEditorIds).
+   *  서버 규칙은 문서에 적힌 이 목록(editorIds)만 보므로, 화면의 판정(canEditTrpg)도 같은 목록을 본다 */
+  editorIds?: string[];
   // (구버전 호환, v2.0) — 예전엔 본문이 이 문서에 그대로 있었다. 서버 모드에서 목록 문서는
   // listHidden으로 질의 단계부터 공개될 수 있어(metaOf), 본문처럼 민감한 내용을 같이 두면 새어 나간다
   // (list 권한이 있으면 같은 문서의 get도 함께 열리는 Firestore/RLS 특성 — 나만보기+목록표시가 이래서
@@ -106,6 +112,12 @@ export interface TrpgLogBody {
   /** 어느 로그 백업 소속인지 (v2.0) — 목록 문서와 따로 저장되므로 소속도 따로 들고 있어야
    *  「메뉴가 비공개면 글도 비공개로」 판정이 본문 문서에도 걸린다. 없으면 기본 섹션. */
   secId?: string;
+  /** 등록한 회원·수정할 수 있는 회원 — 목록 문서와 같은 값 (규칙이 문서마다 따로 보므로 본문에도 적는다) */
+  authorId?: string;
+  editorIds?: string[];
+  /** 역극 모양 로그의 원본 발화 (커플홈) — 있으면 상세의 「본문 편집」이 발화 단위로 고치고 같은 모양으로 다시 그린다.
+   *  디스코드 가져오기·역극 방에서 올리기가 넣는다. 본문을 파일·직접 입력으로 갈아 끼우면 더는 맞지 않으므로 지운다 */
+  src?: RpLogSrc;
 }
 
 /** 본문 문서에 적을 열람 권한 — 비밀번호가 걸려 있으면 목록 필터가 예전부터 그래 왔듯 공개로 둔다

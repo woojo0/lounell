@@ -22,6 +22,17 @@ import { Lightbox } from '@/components/ui/Lightbox';
 import { putBlob, BlobImg } from '@/lib/blobStore';
 
 /** 캐릭터 얼굴 칩 (썸네일 or 데모 플레이스홀더) */
+/** 알림음 종 픽토그램 (커플홈 사용자 요청 — 이모지 대신). 선은 currentColor: 켜짐은 테마색, 꺼짐은 회색에 빗금 */
+function BellIcon({ off }: { off: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.6 2.1H4.4z" />
+      <path d="M10 20.2a2 2 0 0 0 4 0" />
+      {off && <line x1="4" y1="4" x2="20" y2="20" />}
+    </svg>
+  );
+}
+
 function Face({ ch, className, crop }: { ch?: Character; className: string; crop?: CropValue }) {
   // 사진이 없으면 캐릭터 테마색 자리표시자 (커플홈 사용자 요청)
   return (
@@ -450,8 +461,8 @@ export default function RpPage() {
             <b style={{ fontSize: 12, letterSpacing: '.1em', color: 'var(--sub)' }}>MY ROOMS</b>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               {/* 메시지 알림음 (커플홈) — 남의 새 발화가 오면 짧게 울린다. 브라우저마다 켜고 끈다 */}
-              <button className="btn btn-ghost rp-bell" data-tip={soundOn ? '알림음 끄기' : '알림음 켜기'}
-                onClick={() => { setMsgSoundOn(!soundOn); setSoundOn(!soundOn); }}>{soundOn ? '🔔' : '🔕'}</button>
+              <button className={`btn btn-ghost rp-bell${soundOn ? '' : ' off'}`} data-tip={soundOn ? '알림음 끄기' : '알림음 켜기'}
+                onClick={() => { setMsgSoundOn(!soundOn); setSoundOn(!soundOn); }}><BellIcon off={!soundOn} /></button>
               <button className="btn btn-dark" style={{ padding: '0 12px', height: 30, fontSize: 11 }}
                 onClick={() => {
                   // 커플홈 — 기반 자관은 대표 자관(첫 번째)부터 골라 둔다. 자유 개설은 셀렉트에서

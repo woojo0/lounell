@@ -85,9 +85,9 @@ export interface TrpgLog {
   /** 수정할 수 있는 회원 — 이 게시판에 등록 권한이 있는 회원 전원을 저장할 때마다 적는다 (trpgPerm.ts trpgEditorIds).
    *  서버 규칙은 문서에 적힌 이 목록(editorIds)만 보므로, 화면의 판정(canEditTrpg)도 같은 목록을 본다 */
   editorIds?: string[];
-  /** 로그 페이지 주소 (커플홈 사용자 요청 — "로그 주소도 입력할 수 있게"): 주소로 등록하면 서버가 내용을 받아 본문으로 보관하고(logFetch)
-   *  주소도 남긴다. 받아 오지 못한 로그는 본문 없이 주소만 — 상세가 그 주소를 그대로 끼워 보여 준다 */
-  sourceUrl?: string;
+  /** 페이지 주소 별명 (커플홈 사용자 요청 — "로그 주소도 입력할 수 있게": 무작위 id 대신 /trpg/{별명}) — 캐릭터·자관과 같은 규칙.
+   *  참조(플레이기록 연결·자관 목록 등)는 언제나 id로 저장되므로 별명을 바꿔도 끊어지지 않고, id 주소도 계속 열린다 */
+  slug?: string;
   // (구버전 호환, v2.0) — 예전엔 본문이 이 문서에 그대로 있었다. 서버 모드에서 목록 문서는
   // listHidden으로 질의 단계부터 공개될 수 있어(metaOf), 본문처럼 민감한 내용을 같이 두면 새어 나간다
   // (list 권한이 있으면 같은 문서의 get도 함께 열리는 Firestore/RLS 특성 — 나만보기+목록표시가 이래서
@@ -129,6 +129,9 @@ export const bodyVisibility = (l: { visibility: Visibility; password?: string })
   l.password ? 'public' : l.visibility;
 
 export const TRPG_BODY_SEED: TrpgLogBody[] = [];
+
+/** 로그 페이지 주소 — 별명을 정했으면 그것, 아니면 id (캐릭터의 charPath와 같은 규칙) */
+export const logPath = (l: { id: string; slug?: string }) => `/trpg/${l.slug?.trim() || l.id}`;
 
 /** № 자리 표시 — 직접 입력한 텍스트가 있으면 그대로, 없으면 자동 № 0XX */
 export const logNo = (l: TrpgLog) => l.noText || `№ ${String(l.no).padStart(3, '0')}`;

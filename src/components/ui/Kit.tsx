@@ -85,15 +85,29 @@ export function FitText({ children, min, minRatio = 0.85, className, style }: {
 }
 
 /* ---------- textarea — 리사이즈 핸들 제거 + 내용 따라 자동 높이 ---------- */
-export function KTextarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function KTextarea({ maxRows, ...props }: React.TextareaHTMLAttributes<HTMLTextAreaElement> & {
+  /** 이 줄 수까지만 늘어나고 나머지는 칸 안에서 스크롤 (커플홈 사용자 요청 — 긴 로그를 붙여 넣으면 입력한 만큼 늘어나
+   *  화면 전체 스크롤이 너무 길어졌다). 안 주면 지금까지처럼 내용만큼 늘어난다 */
+  maxRows?: number;
+}) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const fit = () => {
     const el = ref.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
+    const full = el.scrollHeight;
+    if (maxRows) {
+      const cs = getComputedStyle(el);
+      const lh = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.45;   // line-height: normal 이면 어림
+      const pad = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+      const max = Math.round(lh * maxRows + pad);
+      el.style.height = `${Math.min(full, max)}px`;
+      el.style.overflowY = full > max ? 'auto' : 'hidden';
+    } else {
+      el.style.height = `${full}px`;
+    }
   };
-  useEffect(fit, [props.value]);
+  useEffect(fit, [props.value, maxRows]);   // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <textarea
       {...props}

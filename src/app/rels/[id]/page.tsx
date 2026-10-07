@@ -18,7 +18,7 @@ import {
 import { RelQuestionSet, RELQ_SEED, RELQ_KEY, CP_LABEL } from '@/lib/relqStore';
 import { putBlob } from '@/lib/blobStore';
 import { GrantsEditor } from '@/components/chars/GrantsEditor';
-import { TrpgLog, TRPG_SEED } from '@/lib/galleryStore';
+import { TrpgLog, TRPG_SEED, logPath } from '@/lib/galleryStore';
 import { RpRoom, RP_SEED, rpMemberIds } from '@/lib/rpStore';
 import { useFonts } from '@/lib/fontStore';
 import { useMainStore } from '@/lib/mainStore';
@@ -1374,7 +1374,7 @@ export default function RelDetailPage() {
         <div className="panel widget" style={{ margin: 0, ...(au?.hideRp ? { gridColumn: '1/-1' } : null) }}>
           <h4>로그 <span className="more" onClick={() => router.push(`/trpg?rel=${rel.id}${auId !== 'base' ? `&au=${auId}` : ''}`)}>더보기 ›</span></h4>
           {relLogs.length > 0 ? relLogs.map(l => (
-            <div key={l.id} className="dday-row" style={{ cursor: 'var(--cur-pointer,pointer)' }} onClick={() => router.push(`/trpg/${l.id}`)}>
+            <div key={l.id} className="dday-row" style={{ cursor: 'var(--cur-pointer,pointer)' }} onClick={() => router.push(logPath(l))}>
               {/* 번호 없이 제목만 — 연동 리스트에서는 순번이 의미가 없다 (사용자 확정) */}
               <span>{l.title}</span>
               <b style={{ fontSize: 11, color: 'var(--faint)' }}>{l.date?.replace(/-/g, '.') ?? ''}</b>

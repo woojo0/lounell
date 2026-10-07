@@ -9,7 +9,8 @@ import { useMenuSettings } from '@/lib/menuStore';
 import { useMembers } from '@/lib/members';
 import { canAddTrpg, trpgEditorIds, sameIds } from '@/lib/trpgPerm';
 import { useLocalList, newId } from '@/lib/postStore';
-import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, decodeLogText, logNo, saveLogBody, isHtmlBody } from '@/lib/galleryStore';
+import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, decodeLogText, logNo, saveLogBody, isHtmlBody, logPath } from '@/lib/galleryStore';
+import { isValidSlug, slugify } from '@/lib/link';
 import { Relation, REL_SEED, Character, CHAR_SEED } from '@/lib/charStore';
 import { SearchBar, KInput, KTextarea, KRadio, KSelect, KDate, Pager } from '@/components/ui/Kit';
 import { Modal } from '@/components/ui/Modal';
@@ -28,7 +29,6 @@ import { DiscordPanel, DC_DEFAULT, dcUnmapped, dcReady, type DcOptions } from '@
 import { parseDiscordLog, dcToMessages } from '@/lib/discordLog';
 import { rpLogLastDate, rpLogSrcFits, type RpLogSrc } from '@/lib/rpLog';
 import { renderLogSrc, logViewChars } from '@/lib/rpLogSrc';
-import { fetchLogUrl } from '@/lib/logFetch';
 
 function TrpgPageInner() {
   const router = useRouter();
@@ -82,6 +82,7 @@ function TrpgPageInner() {
   // ADD LOG 모달
   const [addOpen, setAddOpen] = useState(false);
   const [nNo, setNNo] = useState('');          // № 자리 표시 텍스트 — 비우면 자동 № 0XX
+  const [nSlug, setNSlug] = useState('');      // 페이지 주소 별명 — /trpg/{별명} (커플홈 사용자 요청) · 비우면 자동(id)
   const [nVis, setNVis] = useState<'public' | 'member' | 'private'>('public'); // 접근권한
   const [nListHidden, setNListHidden] = useState(false);   // 목록 표시 여부 (v2.0 — 접근권한과 별개)
   const [nPw, setNPw] = useState('');          // 열람 비밀번호 (선택)
@@ -98,16 +99,10 @@ function TrpgPageInner() {
     if (r) setFilter(q.get('au') ? `${r}:${q.get('au')}` : r);
   }, []);
   const [nDate, setNDate] = useState('');
-  const [nMode, setNMode] = useState<'file' | 'paste' | 'url'>('paste');
+  const [nMode, setNMode] = useState<'file' | 'paste'>('paste');
   const [nBody, setNBody] = useState('');
   const [nFileName, setNFileName] = useState('');
   const [nFile, setNFile] = useState<File | null>(null);
-  // 로그 주소로 (커플홈 사용자 요청 — "로그 주소도 입력할 수 있게") — 서버가 대신 받아 와 본문으로 보관하고(logFetch) 주소도 남긴다.
-  // 못 받아 오면 주소만 저장 — 상세가 그 주소를 그대로 끼워 보여 준다
-  const [nUrl, setNUrl] = useState('');
-  const [nUrlOf, setNUrlOf] = useState('');               // 지금 본문을 만든(또는 시도한) 주소 — sourceUrl로 저장
-  const [nUrlState, setNUrlState] = useState<'idle' | 'loaded' | 'failed'>('idle');
-  const [nUrlBusy, setNUrlBusy] = useState(false);
   /* 디스코드 복사본 자동 판별 (커플홈 사용자 요청 — 따로 「가져오기」 버튼 없이 붙여넣기·직접 작성·파일 첨부에서 알아서):
      본문 글이 HTML이 아니고 parseDiscordLog가 발화를 찾으면 변환 패널을 띄운다. 판별이 틀렸으면 패널에서 「글 그대로」 */
   const dcParsed = useMemo(() => (nBody.trim() && !isHtmlBody(nBody) ? parseDiscordLog(nBody) : null), [nBody]);
@@ -233,38 +228,23 @@ function TrpgPageInner() {
     if (!f) return;
     setNFileName(f.name);
     setNFile(f); // 원본 파일 보관용 (4.3)
-    setNUrlOf(''); setNUrlState('idle');   // 파일을 올리면 주소로 받은 것은 잊는다
     // 미리보기 글자 수 표시용 — 등록 시에는 파일에서 직접 다시 읽으므로 레이스 없음
     decodeText(f).then(setNBody);
-  };
-
-  /** 주소에서 받아 오기 — 내용은 본문(nBody, HTML이면 <base> 포함)·원본 파일(nFile)로, 페이지 제목은 타이틀이 비어 있을 때 채운다 */
-  const loadUrl = async () => {
-    const u = nUrl.trim();
-    if (!u || nUrlBusy) return;
-    setNUrlBusy(true);
-    try {
-      const r = await fetchLogUrl(u);
-      setNFile(r.file); setNFileName(r.file.name); setNBody(r.text);
-      setNUrlOf(u); setNUrlState('loaded');
-      if (!nTitle.trim() && r.title) setNTitle(r.title);
-    } catch {
-      setNFile(null); setNFileName(''); setNBody('');
-      setNUrlOf(u); setNUrlState('failed');
-      toast('주소에서 불러오지 못했습니다 — 이대로 등록하면 주소만 저장됩니다');
-    } finally {
-      setNUrlBusy(false);
-    }
   };
 
   const add = async () => {
     const dcMode = isDc && dc.convert;   // 디스코드 복사본 → 역극 로그 (타이틀은 비워도 된다 — 「자관 이름 로그」)
     if (!nTitle.trim() && !dcMode) { toast('시나리오 타이틀을 입력해 주세요'); return; }
     if (dcMode && !dcReady(rels, nRel, dc)) { toast('자관의 AU(또는 원본 설정)를 먼저 골라 주세요'); return; }
+    // 페이지 주소 별명 — 캐릭터와 같은 규칙(영문 소문자·숫자·하이픈), 다른 로그의 id·별명과 겹치면 안 된다 (어느 섹션이든 주소는 하나)
+    const slug = nSlug.trim();
+    if (slug) {
+      if (!isValidSlug(slug)) { toast('주소는 영문 소문자·숫자·하이픈만 쓸 수 있습니다'); return; }
+      if (logsAll.some(x => x.id === slug || x.slug === slug)) { toast('이미 사용 중인 주소입니다 — 다른 주소를 입력해 주세요'); return; }
+    }
     const id = newId();
     // 파일이 있으면 등록 시점에 직접 읽음 — 읽기 완료 전에 ADD를 눌러도 본문이 비지 않음
-    // 파일 업로드만 파일에서 다시 읽는다 — 주소로 받은 것은 <base>를 끼운 nBody 쪽을, 붙여넣기는 보이는 글 그대로
-    const rawText = nMode === 'file' && nFile ? await decodeText(nFile) : nBody;
+    const rawText = nFile ? await decodeText(nFile) : nBody;
     const relId = nRel === 'none' ? undefined : nRel;
     const auId = relId && nAu !== 'base' ? nAu : undefined;   // 그 자관의 AU (커플홈)
     // 디스코드 복사본이면 매칭대로 발화를 만들어 역극 모양으로 그린다 — 원본 발화(src)도 남겨 「본문 편집」이 되게.
@@ -292,6 +272,7 @@ function TrpgPageInner() {
       id,
       no: Math.max(0, ...logs.map(l => l.no)) + 1, // 내부 순번 (정렬용)
       noText: nNo.trim() || undefined,             // № 자리 표시 텍스트 — 비우면 자동 № 0XX
+      slug: slug || undefined,                      // 페이지 주소 별명 (커플홈)
       title: dcMode ? dcTitle : nTitle.trim(), catchphrase: nCatch.trim() || undefined,
       writer: nWriter.trim(), withText: nWith.trim() || dcWith,
       relId, auId,
@@ -308,7 +289,6 @@ function TrpgPageInner() {
       // 등록자 · 수정 가능 회원(등록 권한이 있는 회원 전원 — trpgPerm.ts)
       authorId: user?.id,
       editorIds: trpgEditorIds(menuSet, sec.id, members),
-      sourceUrl: nUrlOf || undefined,   // 주소로 등록했으면 그 주소 (받아 오지 못했어도 남긴다)
     };
     // 본문·원본 파일은 별도 문서로 (v2.0) — 목록 문서(log)와 같은 곳에 있으면 나만보기여도
     // 목록에 뜨는 순간 함께 새어 나간다. 이 문서의 열람 권한은 로그의 실제 visibility를 그대로 따른다
@@ -333,10 +313,9 @@ function TrpgPageInner() {
     // 본문은 id로만 찾으므로 순서는 아무 의미가 없다.
     setBodies([...bodies, body]);
     setAddOpen(false);
-    setNNo(''); setNVis('public'); setNPw(''); setNListHidden(false); setNTitle(''); setNCatch(''); setNWriter(''); setNWith(''); setNBody(''); setNFileName(''); setNDate(''); setNFile(null);
+    setNNo(''); setNSlug(''); setNVis('public'); setNPw(''); setNListHidden(false); setNTitle(''); setNCatch(''); setNWriter(''); setNWith(''); setNBody(''); setNFileName(''); setNDate(''); setNFile(null);
     setNThumb(null); setNThumbUrl(''); setNThumbCrop(undefined);
     setDc(DC_DEFAULT);
-    setNUrl(''); setNUrlOf(''); setNUrlState('idle');
     toast(dcMode
       ? `디스코드 로그를 역극 모양으로 등록했습니다${nFile ? ' — 원본 파일도 보관됩니다' : ''}`
       : nFile ? '로그가 등록되었습니다 — 원본 파일도 보관됩니다' : '로그가 등록되었습니다');
@@ -352,7 +331,7 @@ function TrpgPageInner() {
   const Ticket = ({ l }: { l: TrpgLog }) => (
     <div className="ticket"
       onContextMenu={e => openOrder(e, l.id)}
-      onClick={() => { if (!editOn) router.push(`/trpg/${l.id}`); }}>
+      onClick={() => { if (!editOn) router.push(logPath(l)); }}>
       <div className="stub-line" />
       <div className={`wide ${!l.thumbId && !l.thumbColor ? `ph ${l.ph}` : ''}`} style={thumbStyle(l)}>
         {l.thumbId && <CroppedBlobImg fileRef={l.thumbId} crop={l.thumbCrop} />}
@@ -409,7 +388,7 @@ function TrpgPageInner() {
                   // 드래그 위치는 전체 기준으로 넘긴다 — 페이지 안 위치로 넘기면 2페이지에서 어긋난다
                   <div key={l.id} className="list-item" {...gridDragProps(logStart + i)}
                     onContextMenu={e => openOrder(e, l.id)}
-                    onClick={() => { if (!editOn) router.push(`/trpg/${l.id}`); }}>
+                    onClick={() => { if (!editOn) router.push(logPath(l)); }}>
                     {editOn && <span className="drag-h">⠿</span>}
                     <div className={`th ${!l.thumbId && !l.thumbColor ? `ph ${l.ph}` : ''}`} style={{ ...thumbStyle(l), position: 'relative' }}>
                       {l.thumbId && <CroppedBlobImg fileRef={l.thumbId} crop={l.thumbCrop} />}
@@ -485,7 +464,7 @@ function TrpgPageInner() {
 
       {/* ＋ ADD LOG (4.3 — 본문 입력 3방식) */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="로그 등록"
-        desc="본문: 파일 업로드(.txt/.html — 내용 자동 판별) 또는 붙여넣기/직접 작성 · 로그 페이지 주소로도 · 디스코드 복사본(붙여 넣기·txt)은 알아서 역극 로그로"
+        desc="본문: 파일 업로드(.txt/.html — 내용 자동 판별) 또는 붙여넣기/직접 작성 · 디스코드 복사본(붙여 넣기·txt)은 알아서 역극 로그로"
         actions={<>
           <button className="btn btn-ghost" onClick={() => setAddOpen(false)}>CANCEL</button>
           <button className="btn btn-dark" onClick={add}>ADD</button>
@@ -497,7 +476,12 @@ function TrpgPageInner() {
             <KInput placeholder="№ 표기 (선택 — 비우면 자동)" value={nNo} onChange={e => setNNo(e.target.value)}
               style={{ maxWidth: 200 }} />
           </div>
-          <KInput placeholder="캐치프레이즈 (선택)" value={nCatch} onChange={e => setNCatch(e.target.value)} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <KInput placeholder="캐치프레이즈 (선택)" value={nCatch} onChange={e => setNCatch(e.target.value)} />
+            {/* 페이지 주소 별명 (커플홈 사용자 요청 — 무작위 id 대신 /trpg/별명) — 입력하는 대로 캐릭터와 같은 규칙으로 다듬는다 */}
+            <KInput placeholder="페이지 주소 (선택) — /trpg/여기" value={nSlug} onChange={e => setNSlug(slugify(e.target.value))}
+              style={{ maxWidth: 220 }} />
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <KInput placeholder="라이터 (선택)" value={nWriter} onChange={e => setNWriter(e.target.value)} />
             <KInput placeholder="같이 간 사람 (선택)" value={nWith} onChange={e => setNWith(e.target.value)} />
@@ -587,27 +571,8 @@ function TrpgPageInner() {
           <div className="mini-seg" style={{ justifySelf: 'start' }}>
             <button className={nMode === 'paste' ? 'on' : ''} onClick={() => setNMode('paste')}>붙여넣기/직접 작성</button>
             <button className={nMode === 'file' ? 'on' : ''} onClick={() => setNMode('file')}>파일 업로드</button>
-            <button className={nMode === 'url' ? 'on' : ''} onClick={() => setNMode('url')}>주소 입력</button>
           </div>
-          {nMode === 'url' ? (
-            /* 로그 페이지 주소 (커플홈 사용자 요청) — 서버가 받아 와 본문으로 보관, 주소도 남긴다 */
-            <div style={{ display: 'grid', gap: 6 }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <KInput placeholder="https:// 로그 페이지 주소" value={nUrl} onChange={e => setNUrl(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); loadUrl(); } }} style={{ flex: 1 }} />
-                <button className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} disabled={nUrlBusy || !nUrl.trim()} onClick={loadUrl}>
-                  {nUrlBusy ? '불러오는 중…' : '불러오기'}
-                </button>
-              </div>
-              <small className="hint" style={{ margin: 0 }}>
-                {nUrlState === 'loaded'
-                  ? `${nFileName} — 읽기 완료 (${nBody.length.toLocaleString()}자) · 내용이 본문으로 보관되고 주소도 함께 남습니다`
-                  : nUrlState === 'failed'
-                    ? '불러오지 못했습니다 — 이대로 등록하면 주소만 저장되고, 상세에서 그 페이지를 그대로 끼워 보여 줍니다'
-                    : '웹에 올라간 로그 페이지(크리스탈리아·코코포리아 내보내기 등)의 주소 — 내용을 받아 본문으로 보관합니다'}
-              </small>
-            </div>
-          ) : nMode === 'file' ? (
+          {nMode === 'file' ? (
             <>
               <input ref={fileRef} type="file" accept=".txt,.html,.htm,text/*" style={{ display: 'none' }}
                 onChange={e => { readFile(e.target.files?.[0]); e.target.value = ''; }} />
@@ -620,7 +585,7 @@ function TrpgPageInner() {
               </div>
             </>
           ) : (
-            <KTextarea style={{ minHeight: 120, fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 12 }}
+            <KTextarea maxRows={36} style={{ minHeight: 120, fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 12 }}
               placeholder="HTML 코드 통째 붙여넣기 · 텍스트 직접 작성 · 디스코드 복사본 붙여넣기(알아서 역극 로그로)" value={nBody} onChange={e => setNBody(e.target.value)} />
           )}
           {/* 디스코드 복사본이면 변환 패널 (커플홈 사용자 요청 — 따로 버튼 없이) — 발화자 매칭·모양. 「글 그대로」로 끄면 평범한 본문으로 저장 */}

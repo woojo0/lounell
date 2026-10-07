@@ -7,7 +7,8 @@ import { useHrefBlock } from '@/components/shell/MenuGuard';
 import { sectionHref, MAIN_SEC, secStamp, useSectionTitle } from '@/lib/sectionStore';
 import { useAuth } from '@/lib/auth';
 import { useLocalList } from '@/lib/postStore';
-import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, showAsHtml, decodeLogText, logNo, saveLogBody } from '@/lib/galleryStore';
+import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, showAsHtml, decodeLogText, logNo, saveLogBody, logPath } from '@/lib/galleryStore';
+import { isValidSlug, slugify } from '@/lib/link';
 import { Relation, REL_SEED, Character, CHAR_SEED, charGrant } from '@/lib/charStore';
 import { applyLogSides, rpSpeakers, type RpLogSrc } from '@/lib/rpLog';
 import { useMenuSettings } from '@/lib/menuStore';
@@ -15,7 +16,6 @@ import { useMembers } from '@/lib/members';
 import { canEditTrpg, trpgEditorIds } from '@/lib/trpgPerm';
 import { logViewChars, renderLogSrc } from '@/lib/rpLogSrc';
 import { LogSrcEditor } from '@/components/rp/LogSrcEditor';
-import { fetchLogUrl } from '@/lib/logFetch';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { getBlob, putBlob, useBlobUrl } from '@/lib/blobStore';
 import { PageTitle, EditableDesc } from '@/components/ui/PageText';
@@ -46,7 +46,7 @@ function LogFrame({ frameRef, html, title, onFrameLoad }: {
 }
 
 export default function TrpgDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const { id: key } = useParams<{ id: string }>();   // id 또는 페이지 주소 별명 (커플홈 — 캐릭터·자관과 같게)
   const router = useRouter();
   const { user, isAdmin } = useAuth();
   const toast = useToast();
@@ -65,7 +65,13 @@ export default function TrpgDetailPage() {
   const frameRef = useRef<HTMLIFrameElement>(null);
   const gotHeightRef = useRef(false);   // 안쪽에서 높이 보고가 왔는지 (안 오면 기본 높이로 되돌린다)
 
-  const l = logs.find(x => x.id === id);
+  // 별명을 방금 바꾸면 주소(옛 별명)로는 잠깐 못 찾는다 — 직전에 찾았던 id를 기억해 두고 그걸로 이어 받는다
+  // (안 그러면 아래 「없음 → 홈」 효과가 새 주소로 옮기기 전에 먼저 튕겨 낸다)
+  const lastIdRef = useRef<string | null>(null);
+  const found = logs.find(x => x.id === key || (x.slug ?? '') === key);
+  const l = found ?? (lastIdRef.current ? logs.find(x => x.id === lastIdRef.current) : undefined);
+  useEffect(() => { if (found) lastIdRef.current = found.id; }, [found]);
+  const id = l?.id ?? key;   // 아래는 전부 진짜 id로 (본문 문서·저장·비밀번호 열람 기억)
   /* 이 글이 속한 곳이 비공개면 주소로 들어와도 열리지 않게 (v2.0 사용자 요청).
      글 주소에는 섹션이 없어 MenuGuard가 못 막는다 — 글을 읽어 소속을 알아낸 여기서 판정한다.
      **다른 early return보다 먼저 불러야 한다**(훅이므로 렌더마다 개수가 같아야 한다) */
@@ -112,29 +118,17 @@ export default function TrpgDetailPage() {
   // 로그 정보 수정 — 메타 + 본문 교체(파일/직접 입력) + 썸네일 교체(이미지 크롭/단색·그라데이션)
   const [eOpen, setEOpen] = useState(false);
   const [e, setE] = useState({
-    noText: '', title: '', catchphrase: '', writer: '', withText: '',
+    noText: '', slug: '', title: '', catchphrase: '', writer: '', withText: '',
     relId: 'none', auId: 'base', date: '', visibility: 'public' as TrpgLog['visibility'], password: '',
     listHidden: false,   // 목록 표시 여부 (v2.0 — 접근권한과 별개)
   });
   // 본문 교체
-  const [bodyMode, setBodyMode] = useState<'keep' | 'file' | 'text' | 'url'>('keep');
+  const [bodyMode, setBodyMode] = useState<'keep' | 'file' | 'text'>('keep');
   // 본문 표시 방식 (v2.0) — 자동 판별이 직접 쓴 글을 HTML로 오판하는 경우가 있어 직접 고를 수 있게
   const [bodyDisp, setBodyDisp] = useState<'auto' | 'text' | 'html'>('auto');
   const [eFile, setEFile] = useState<File | null>(null);
   const [eText, setEText] = useState('');
   const eFileRef = useRef<HTMLInputElement>(null);
-  // 로그 주소로 교체 (커플홈 사용자 요청) — 받아 온 내용으로 본문을 갈아 끼우고 주소도 남긴다 (logFetch)
-  const [eUrl, setEUrl] = useState('');
-  const [eUrlData, setEUrlData] = useState<{ file: File; text: string } | null>(null);
-  const [eUrlBusy, setEUrlBusy] = useState(false);
-  const loadEUrl = async () => {
-    const u = eUrl.trim();
-    if (!u || eUrlBusy) return;
-    setEUrlBusy(true);
-    try { const r = await fetchLogUrl(u); setEUrlData({ file: r.file, text: r.text }); }
-    catch { setEUrlData(null); toast('주소에서 불러오지 못했습니다 — 저장하면 주소만 남습니다'); }
-    finally { setEUrlBusy(false); }
-  };
   const eThumbRef = useRef<HTMLInputElement>(null);
   // 썸네일 교체
   const [thumbMode, setThumbMode] = useState<'keep' | 'image' | 'color'>('keep');
@@ -199,6 +193,12 @@ export default function TrpgDetailPage() {
 
   const saveEdit = async () => {
     if (!e.title.trim()) { toast('시나리오 타이틀을 입력해 주세요'); return; }
+    // 페이지 주소 별명 (커플홈) — 캐릭터와 같은 규칙, 다른 로그의 id·별명과 겹치면 안 된다
+    const slug = e.slug.trim();
+    if (slug && slug !== (l?.slug ?? '')) {
+      if (!isValidSlug(slug)) { toast('주소는 영문 소문자·숫자·하이픈만 쓸 수 있습니다'); return; }
+      if (logs.some(x => x.id !== id && (x.id === slug || x.slug === slug))) { toast('이미 사용 중인 주소입니다 — 다른 주소를 입력해 주세요'); return; }
+    }
     // 본문 교체 준비 — 본문은 목록과 분리 저장이라(v2.0) 이제 TrpgLogBody 조각으로 만든다
     let bodyPatch: Partial<TrpgLogBody> = {};
     const nextRelId = e.relId === 'none' ? undefined : e.relId;
@@ -222,12 +222,6 @@ export default function TrpgDetailPage() {
       };
     } else if (bodyMode === 'text' && eText.trim()) {
       bodyPatch = await saveLogBody(eText);
-    } else if (bodyMode === 'url' && eUrlData) {
-      // 주소에서 받아 온 내용(<base> 포함)으로 — 받은 원본 바이트는 원본 파일로 보관
-      bodyPatch = {
-        ...(await saveLogBody(eUrlData.text)),
-        originalFileId: await putBlob(eUrlData.file), originalName: eUrlData.file.name,
-      };
     }
     // 썸네일 교체 준비
     let thumbPatch: Partial<TrpgLog> = {};
@@ -242,6 +236,7 @@ export default function TrpgDetailPage() {
     const nextLog: TrpgLog = {
       ...(l as TrpgLog),
       noText: e.noText.trim() || undefined,
+      slug: slug || undefined,
       title: e.title.trim(), catchphrase: e.catchphrase.trim() || undefined,
       writer: e.writer.trim(), withText: e.withText.trim(),
       relId: e.relId === 'none' ? undefined : e.relId,
@@ -249,7 +244,6 @@ export default function TrpgDetailPage() {
       date: e.date || undefined,
       visibility: e.visibility, password: e.password.trim() || undefined,
       listHidden: e.listHidden,
-      sourceUrl: bodyMode === 'url' && eUrl.trim() ? eUrl.trim() : l?.sourceUrl,   // 주소로 교체했으면 그 주소 (받아 오지 못했어도)
       editorIds: trpgEditorIds(menuSet, l?.secId ?? MAIN_SEC, members, l?.editorIds),   // 등록 권한이 있는 회원 = 수정 가능 (저장할 때마다 최신으로)
       ...thumbPatch,
       // 예전엔 본문이 이 문서에 있었다 — 저장할 때마다 확실히 비워서(구버전 잔재 정리),
@@ -279,8 +273,10 @@ export default function TrpgDetailPage() {
     // 재저장 대상이 되고, 큰 본문이 쌓인 홈에서는 그 합이 쓰기 한도를 넘어 저장이 실패했다
     setBodies(bd ? bodies.map(x => x.id === id ? nextBody : x) : [...bodies, nextBody]);
     if (bodyMode !== 'keep') setBodyText(null); // 본문 다시 로드
+    // 별명을 바꿨으면 지금 주소(옛 별명)로는 더 못 찾으니 새 주소로 — id 주소에서 바꾼 경우에도 별명 주소를 보여 준다
+    if ((nextLog.slug ?? '') !== (l?.slug ?? '')) router.replace(logPath(nextLog));
     setEOpen(false);
-    setBodyMode('keep'); setEFile(null); setEText(''); setEUrlData(null);
+    setBodyMode('keep'); setEFile(null); setEText('');
     setThumbMode('keep'); setEThumb(null); setEThumbUrl(''); setEThumbCrop(undefined);
     toast('저장되었습니다');
   };
@@ -370,9 +366,7 @@ export default function TrpgDetailPage() {
   const origName = bd?.originalName ?? l.originalName;
   // 본문이 없을 때 대신 띄울 수 있는 서버 파일 주소 (v2.0 포크 제보 — 본문 저장 실패 대비)
   const fallbackUrl = [bd?.bodyId, l.bodyId, origFileId]
-    .find(x => typeof x === 'string' && /^https?:/.test(x))
-    // 주소만 저장된 로그(받아 오지 못한 것, 커플홈) — 그 페이지를 그대로 끼워 보여 준다
-    ?? (l.sourceUrl && /^https?:/.test(l.sourceUrl) ? l.sourceUrl : undefined);
+    .find(x => typeof x === 'string' && /^https?:/.test(x));
   // iframe 기본 body 마진 제거(흰 테두리 방지) + 높이 리포터 주입
   // 크리스탈리아/크릿 계열 로그는 본문을 JS로 그리므로 스크립트 실행이 필요 —
   // 널 오리진 샌드박스(allow-scripts만)라 사이트 쿠키·DOM 접근은 불가 (6.3의 격리 목적 유지)
@@ -443,14 +437,13 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
           {canEdit && !editing && <button className="btn btn-ghost" onClick={startBodyEdit}>본문 편집</button>}
           {canEdit && <button className="btn btn-dark" onClick={() => {
             setE({
-              noText: l.noText ?? '', title: l.title, catchphrase: l.catchphrase ?? '', writer: l.writer,
+              noText: l.noText ?? '', slug: l.slug ?? '', title: l.title, catchphrase: l.catchphrase ?? '', writer: l.writer,
               withText: l.withText, relId: l.relId ?? 'none', auId: l.auId ?? 'base', date: l.date ?? '',
               visibility: l.visibility, password: l.password ?? '', listHidden: !!l.listHidden,
             });
             // 본문·썸네일 교체 상태 초기화 (기본: 현재 것 유지)
             setBodyMode('keep'); setEFile(null); setEText(bodyText ?? '');
             if (bd?.src) { setEStyle(bd.src.style); setEFmt(bd.src.fmt); setEFaces(bd.src.faces); }
-            setEUrl(l.sourceUrl ?? ''); setEUrlData(null);
             const bh = bd?.bodyHtml ?? l.bodyHtml;
             setBodyDisp(bh === undefined ? 'auto' : bh ? 'html' : 'text');
             // 「현재 유지」에서도 위치·확대를 조정할 수 있게 지금 크롭값에서 시작한다
@@ -486,7 +479,7 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
             </div>
             {eSrc
               ? <LogSrcEditor src={eSrc} onChange={setESrc} members={srcChars.members} others={srcChars.others} />
-              : <KTextarea value={eBody} onChange={ev => setEBody(ev.target.value)}
+              : <KTextarea maxRows={40} value={eBody} onChange={ev => setEBody(ev.target.value)}
                   style={{ minHeight: 320, ...(html ? { fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 12 } : {}) }} />}
             {eSrc && (
               <div className="lsrc-bar">
@@ -507,11 +500,7 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
               ? (
                 <>
                   <iframe className="log-frame" sandbox="allow-scripts" src={fallbackUrl} title={l.title} />
-                  <p className="hint" style={{ marginTop: 6 }}>
-                    {fallbackUrl === l.sourceUrl
-                      ? '주소만 저장된 로그라 그 페이지를 그대로 끼워 보여 주고 있습니다 — 사이트가 끼워 넣기를 막아 두면 비어 보이니 아래 「원본 주소」로 여세요'
-                      : '본문 문서를 불러오지 못해 보관된 원본 파일로 표시하고 있습니다 — 수정 화면에서 본문을 다시 저장하면 원래대로 돌아갑니다'}
-                  </p>
+                  <p className="hint" style={{ marginTop: 6 }}>본문 문서를 불러오지 못해 보관된 원본 파일로 표시하고 있습니다 — 수정 화면에서 본문을 다시 저장하면 원래대로 돌아갑니다</p>
                 </>
               )
               : (
@@ -524,13 +513,6 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
         )}
         {/* 설명문 없이 원본 파일 다운로드 링크만 (4.3 백업) */}
         <p className="hint" style={{ marginTop: 10 }}>
-          {/* 주소로 등록한 로그 — 원본 페이지 링크 (커플홈) */}
-          {l.sourceUrl && (
-            <a href={l.sourceUrl} target="_blank" rel="noreferrer"
-              style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'none', marginRight: 14 }}>
-              ↗ 원본 주소
-            </a>
-          )}
           {origFileId && (
             /^https?:/.test(origFileId)
               // 서버에 올라간 파일은 링크로 연다 — fetch로 받으면 버킷 CORS 설정이 필요해진다
@@ -572,7 +554,12 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
             <KInput placeholder="№ 표기 (선택 — 비우면 자동)" value={e.noText} onChange={ev => setE(s => ({ ...s, noText: ev.target.value }))}
               style={{ maxWidth: 200 }} />
           </div>
-          <KInput placeholder="캐치프레이즈 (선택)" value={e.catchphrase} onChange={ev => setE(s => ({ ...s, catchphrase: ev.target.value }))} />
+          <div style={{ display: 'flex', gap: 8 }}>
+            <KInput placeholder="캐치프레이즈 (선택)" value={e.catchphrase} onChange={ev => setE(s => ({ ...s, catchphrase: ev.target.value }))} />
+            {/* 페이지 주소 별명 (커플홈 사용자 요청 — 무작위 id 대신 /trpg/별명) — id 주소는 계속 열린다 */}
+            <KInput placeholder={`페이지 주소 (비우면 ${l.id})`} value={e.slug} onChange={ev => setE(s => ({ ...s, slug: slugify(ev.target.value) }))}
+              style={{ maxWidth: 220 }} />
+          </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <KInput placeholder="라이터 (선택)" value={e.writer} onChange={ev => setE(s => ({ ...s, writer: ev.target.value }))} />
             <KInput placeholder="같이 간 사람 (선택)" value={e.withText} onChange={ev => setE(s => ({ ...s, withText: ev.target.value }))} />
@@ -698,24 +685,7 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
             {/* 아래 표시 방식 세그는 본문 교체와 별개 — 저장하면 항상 반영된다 */}
             <button className={bodyMode === 'text' ? 'on' : ''} onClick={() => { setBodyMode('text'); if (!eText) setEText(bodyText ?? ''); }}>직접 수정</button>
             <button className={bodyMode === 'file' ? 'on' : ''} onClick={() => setBodyMode('file')}>파일 업로드</button>
-            <button className={bodyMode === 'url' ? 'on' : ''} onClick={() => setBodyMode('url')}>주소 입력</button>
           </div>
-          {bodyMode === 'url' && (
-            <div style={{ display: 'grid', gap: 6 }}>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <KInput placeholder="https:// 로그 페이지 주소" value={eUrl} onChange={ev => setEUrl(ev.target.value)}
-                  onKeyDown={ev => { if (ev.key === 'Enter') { ev.preventDefault(); loadEUrl(); } }} style={{ flex: 1 }} />
-                <button className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} disabled={eUrlBusy || !eUrl.trim()} onClick={loadEUrl}>
-                  {eUrlBusy ? '불러오는 중…' : '불러오기'}
-                </button>
-              </div>
-              <small className="hint" style={{ margin: 0 }}>
-                {eUrlData
-                  ? `${eUrlData.file.name} — 읽기 완료 (${eUrlData.text.length.toLocaleString()}자) · 저장 시 이 내용으로 본문이 교체되고 주소도 남습니다`
-                  : '불러오기를 누르면 내용을 받아 옵니다 · 못 받아 오면 저장 시 주소만 남습니다'}
-              </small>
-            </div>
-          )}
           {bodyMode === 'file' && (
             <>
               <input ref={eFileRef} type="file" accept=".txt,.html,.htm,text/*" style={{ display: 'none' }}
@@ -730,7 +700,7 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
             </>
           )}
           {bodyMode === 'text' && (
-            <KTextarea style={{ minHeight: 160, fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 12 }}
+            <KTextarea maxRows={36} style={{ minHeight: 160, fontFamily: 'ui-monospace, Consolas, monospace', fontSize: 12 }}
               placeholder="HTML 코드 통째 붙여넣기 또는 텍스트 직접 작성" value={eText} onChange={ev => setEText(ev.target.value)} />
           )}
 

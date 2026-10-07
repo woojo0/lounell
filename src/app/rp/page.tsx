@@ -572,7 +572,7 @@ export default function RpPage() {
                             )}
                             {/* 한두 글자짜리는 말풍선이 찌그러져 보여 최소 폭을 둔다 */}
                             {(m.text || !m.imgId) && (
-                              <div className={`im-bub${m.text.trim().length <= 2 ? ' short' : ''}`}>{m.text}</div>
+                              <div className={`im-bub${m.text.trim().length <= 3 ? ' short' : ''}`}>{m.text}</div>
                             )}
                           </div>
                           {acts}
@@ -832,7 +832,8 @@ export default function RpPage() {
       {logOpen && sel && (
         <RpLogModal room={sel} msgs={msgsOf(sel)} chars={rpChars} sub={roomLabel(sel)}
           isAdmin={isAdmin} onClose={() => setLogOpen(false)}
-          rightIds={user ? rpChars.filter(c => !!charGrant(c, user.id) || (!!c.own && isAdmin)).map(c => c.id) : []} />
+          rightIds={user ? rpChars.filter(c => !!charGrant(c, user.id) || (!!c.own && isAdmin)).map(c => c.id) : []}
+          faceInfo={Object.fromEntries(rpChars.map(c => [c.id, { ref: c.thumbId, crop: faceOf(c) }]))} />
       )}
 
       {/* 완결 확인 (삭제 아님 — END/CANCEL) */}

@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/auth';
 import { useLocalList } from '@/lib/postStore';
 import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, showAsHtml, decodeLogText, logNo, saveLogBody } from '@/lib/galleryStore';
 import { Relation, REL_SEED, Character, CHAR_SEED, charGrant } from '@/lib/charStore';
+import { applyLogSides } from '@/lib/rpLog';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { getBlob, putBlob, useBlobUrl } from '@/lib/blobStore';
 import { PageTitle, EditableDesc } from '@/components/ui/PageText';
@@ -258,7 +259,12 @@ export default function TrpgDetailPage() {
   const rel = rels.find(r => r.id === l.relId);
   const body = bodyText ?? '';
   // 지정값이 있으면 그대로 — 직접 쓴 글이 태그처럼 보이는 문자 때문에 HTML로 오판되던 것 방지
+  /* 메신저 모양 역극 로그의 좌우는 보는 사람 기준 (커플홈 사용자 요청) — 관리자는 자캐가 오른쪽, 역극 참여 회원은
+     자기 캐릭터가 오른쪽, 그 밖(방문자·참여 안 한 회원)은 관리자의 캐릭터가 오른쪽. 좌우가 이미 박힌 옛 본문은 그대로 */
+  const ownIds = allChars.filter(c => c.own).map(c => c.id);
+  const grantedIds = user && !isAdmin ? allChars.filter(c => !!charGrant(c, user.id)).map(c => c.id) : [];
   const html = showAsHtml({ bodyHtml: bd?.bodyHtml ?? l.bodyHtml }, body);
+  const sidedBody = html ? applyLogSides(body, grantedIds.length ? grantedIds : ownIds) : body;
   // 원본 파일도 분리 저장된 쪽 우선, 없으면 구버전 로그의 내장 값 (v2.0)
   const origFileId = bd?.originalFileId ?? l.originalFileId;
   const origName = bd?.originalName ?? l.originalName;
@@ -314,10 +320,10 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
 </style>`;
   /** 주입 위치 — <!DOCTYPE ...> 가 있으면 그 **바로 뒤**에, 없으면 doctype을 만들어 앞에.
    *  표준 모드를 지켜야 body 높이가 진짜 내용 높이가 된다 (위 주석 참조) */
-  const dt = /^\s*<!doctype[^>]*>/i.exec(body);
+  const dt = /^\s*<!doctype[^>]*>/i.exec(sidedBody);
   const srcDoc = dt
-    ? body.slice(0, dt[0].length) + inject + body.slice(dt[0].length)
-    : `<!DOCTYPE html>${inject}${body}`;
+    ? sidedBody.slice(0, dt[0].length) + inject + sidedBody.slice(dt[0].length)
+    : `<!DOCTYPE html>${inject}${sidedBody}`;
 
   return (
     <section className="page">

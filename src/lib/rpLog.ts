@@ -18,6 +18,10 @@ export interface RpLogOpts {
   style?: 'script' | 'imsg';
   /** 메신저 모양에서 오른쪽(파란 말풍선)에 둘 캐릭터 id — 저장하는 사람이 방에서 보던 그대로 */
   rightIds?: string[];
+  /** 프로필 사진 (커플홈 사용자 요청) — 캐릭터 id → 주소(홈 저장소)와 얼굴칸 안 위치(인라인 스타일). 없으면 사진 없이 */
+  faces?: Record<string, { url: string; style: string }>;
+  /** 좌우를 정하지 않고 캐릭터 id만 적어 둔다 (RP LOG 게시판용) — 보는 사람에 따라 상세 페이지가 applyLogSides로 정한다 */
+  neutralSides?: boolean;
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -112,7 +116,7 @@ function imsgRows(msgs: RpMessage[], chars: Character[], opts: RpLogOpts): strin
     if (m.rp) {
       const c = chars.find(x => x.id === m.charId);
       const hex = safeHex(c?.color);
-      rows.push(`<div class="m${me ? ' me' : ''}" style="--c:${hex};--rgb:${hexRgb(hex)}"><div class="who">${esc(nameOf(chars, m.charId))}</div><div class="txt">${esc(txt)}</div></div>`);
+      rows.push(`<div class="m${!opts.neutralSides && me ? ' me' : ''}" data-c="${esc(m.charId ?? '')}" style="--c:${hex};--rgb:${hexRgb(hex)}"><div class="who">${esc(nameOf(chars, m.charId))}</div><div class="txt">${esc(txt)}</div></div>`);
       return;
     }
     const prev = msgs[i - 1], next = msgs[i + 1];
@@ -120,8 +124,13 @@ function imsgRows(msgs: RpMessage[], chars: Character[], opts: RpLogOpts): strin
     const first = gap || prev.kind !== 'char' || prev.charId !== m.charId || !!prev.rp;
     const last = !next || next.kind !== 'char' || next.charId !== m.charId || !!next.rp || Date.parse(next.date) - Date.parse(m.date) > GAP;
     const nameNeeded = !prev || prev.kind !== 'char' || prev.charId !== m.charId;
-    const short = m.text.trim().length > 0 && m.text.trim().length <= 2;
-    rows.push(`<div class="b ${me ? 'me' : 'them'}${first ? ' first' : ''}${last ? ' last' : ''}">${!me && nameNeeded ? `<div class="n">${esc(nameOf(chars, m.charId))}</div>` : ''}<div class="bub${short ? ' short' : ''}">${esc(txt)}</div></div>`);
+    const short = m.text.trim().length > 0 && m.text.trim().length <= 3;
+    const side = opts.neutralSides ? '' : (me ? ' me' : ' them');
+    // 얼굴은 사진 옵션을 켰을 때만 — 상대 쪽 묶음 끝에 하나 (내 쪽·중간은 CSS가 숨긴다). 좌우를 안 정한 본문은 전부 적어 둔다
+    const f = opts.faces?.[m.charId ?? ''];
+    const face = opts.faces ? `<span class="f">${f ? `<img src="${esc(f.url)}" style="${esc(f.style)}" alt="">` : ''}</span>` : '';
+    const nm = nameNeeded && (opts.neutralSides || !me) ? `<div class="n">${esc(nameOf(chars, m.charId))}</div>` : '';
+    rows.push(`<div class="b${side}${first ? ' first' : ''}${last ? ' last' : ''}" data-c="${esc(m.charId ?? '')}">${face}<div class="col">${nm}<div class="bub${short ? ' short' : ''}">${esc(txt)}</div></div></div>`);
   });
   return rows;
 }
@@ -137,14 +146,21 @@ body{margin:0;background:#f2f2f7;color:#111;font-family:-apple-system,'Pretendar
 .sys{align-self:center;text-align:center;max-width:82%;font-size:11.5px;line-height:1.7;color:#8e8e93;margin:6px 0;white-space:pre-wrap;word-break:break-word}
 .sys.date{margin:16px 0 8px;font-size:11px}
 .sys.date b{font-weight:700;margin-right:4px}
-.b{display:flex;flex-direction:column;max-width:72%;position:relative}
-.b.them{align-self:flex-start;align-items:flex-start;margin-left:8px}
-.b.me{align-self:flex-end;align-items:flex-end;margin-right:8px}
+.b{display:flex;align-items:flex-end;gap:14px;max-width:72%;position:relative}
+.b.them{align-self:flex-start;margin-left:8px}
+.b.me{align-self:flex-end;flex-direction:row-reverse;gap:6px;margin-right:8px}
 .b.first{margin-top:8px}
+.col{display:flex;flex-direction:column;min-width:0}
+.b.me .col{align-items:flex-end}
 .n{font-size:10px;color:#8e8e93;margin:0 0 3px 4px}
-.bub{position:relative;padding:7px 12px;border-radius:18px;font-size:13px;line-height:1.45;white-space:pre-wrap;word-break:break-word;background:#e9e9eb;color:#000;max-width:100%}
+.b.me .n{display:none}
+.f{width:26px;height:26px;border-radius:50%;overflow:hidden;position:relative;flex-shrink:0;align-self:flex-end;background:#d8d8dc}
+.b:not(.last) .f{visibility:hidden}
+.b.me .f{display:none}
+.f img{display:block}
+.bub{position:relative;padding:7px 12px;border-radius:18px;font-size:13px;line-height:1.45;white-space:pre-wrap;word-break:break-word;background:#e9e9eb;color:#000;max-width:100%;min-width:37px}
 .b.me .bub{background:#0b84ff;color:#fff}
-.bub.short{min-width:46px;text-align:center}
+.bub.short{text-align:center}
 .b.them:not(.last) .bub{border-bottom-left-radius:5px}
 .b.them:not(.first) .bub{border-top-left-radius:5px}
 .b.me:not(.last) .bub{border-bottom-right-radius:5px}
@@ -232,6 +248,18 @@ ${rows.join('\n')}
 </body>
 </html>
 `;
+}
+
+/** 좌우를 안 정한 메신저 본문(neutralSides)에 보는 사람 기준으로 me/them을 붙인다 (커플홈 사용자 요청 —
+ *  RP LOG 게시판에서는 관리자에게는 자캐가, 역극 참여 회원에게는 자기 캐릭터가 오른쪽).
+ *  이미 좌우가 있는 본문(파일 저장본·옛 로그)은 data-c가 없어 그대로다 */
+export function applyLogSides(html: string, rightIds: string[]): string {
+  const right = new Set(rightIds);
+  return html
+    .replace(/<div class="b([^"]*)" data-c="([^"]*)"/g, (_s, cls: string, id: string) =>
+      `<div class="b${cls} ${right.has(id) ? 'me' : 'them'}" data-c="${id}"`)
+    .replace(/<div class="m([^"]*)" data-c="([^"]*)"/g, (_s, cls: string, id: string) =>
+      `<div class="m${cls}${right.has(id) ? ' me' : ''}" data-c="${id}"`);
 }
 
 /** 로그 전체를 새 탭에서 한 장으로 (커플홈 사용자 요청 — 방 안에서는 잘라서 보여 주므로 전체는 여기서).

@@ -1,7 +1,7 @@
 'use client';
 // 역극 로그 (커플홈) — 방의 발화를 로그로 만들어 txt/html 파일로 저장하거나 RP LOG 게시판에 올린다.
 // 파일 저장은 방 참여자 누구나, 게시판 올리기는 관리자만 (로그 등록이 원래 관리자 전용이다).
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RpRoom, RpMessage } from '@/lib/rpStore';
 import type { Character, Visibility } from '@/lib/charStore';
@@ -11,11 +11,39 @@ import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, saveLo
 import { useSections, filterSection, secStamp, MAIN_SEC } from '@/lib/sectionStore';
 import { Modal } from '@/components/ui/Modal';
 import { KInput, KSelect, KCheck } from '@/components/ui/Kit';
+import { coverImgStyle, type CropValue } from '@/components/ui/CropEditor';
+import { blobUrlOf } from '@/lib/blobStore';
 import { useToast } from '@/components/ui/Toast';
 
 const isHex = (c?: string) => !!c && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(c);
 
-export function RpLogModal({ room, msgs, chars, sub, isAdmin, rightIds, onClose }: {
+/** 얼굴 사진 정보 — 캐릭터 id → 파일 참조와 자관에서 잡아 둔 1:1 위치 */
+export type FaceInfo = Record<string, { ref?: string; crop?: CropValue }>;
+type Faces = Record<string, { url: string; style: string }>;
+
+/** React 스타일 객체 → 인라인 CSS 문자열 (로그 HTML은 문자열이라) */
+const cssOf = (s: React.CSSProperties) =>
+  Object.entries(s).map(([k, v]) => `${k.replace(/[A-Z]/g, ch => '-' + ch.toLowerCase())}:${v}`).join(';');
+
+/** 말한 캐릭터들의 얼굴 주소·위치를 모은다 — 주소는 홈 저장소(서버 모드) 그대로, 위치는 그림 비율을 재서 역극 화면과 같은 식으로 */
+async function resolveFaces(speakers: Character[], info: FaceInfo): Promise<Faces> {
+  const out: Faces = {};
+  await Promise.all(speakers.map(async c => {
+    const fi = info[c.id];
+    const url = await blobUrlOf(fi?.ref);
+    if (!url) return;
+    const wide = await new Promise<boolean>(res => {
+      const im = new Image();
+      im.onload = () => res(im.naturalWidth >= im.naturalHeight);
+      im.onerror = () => res(true);
+      im.src = url;
+    });
+    out[c.id] = { url, style: cssOf(coverImgStyle(fi?.crop, wide)) };
+  }));
+  return out;
+}
+
+export function RpLogModal({ room, msgs, chars, sub, isAdmin, rightIds, faceInfo, onClose }: {
   room: RpRoom;
   msgs: RpMessage[];
   chars: Character[];       // 이 방에서 쓰는 캐릭터 — AU 방이면 AU 프로필로 바꿔 끼운 것
@@ -23,14 +51,28 @@ export function RpLogModal({ room, msgs, chars, sub, isAdmin, rightIds, onClose 
   isAdmin: boolean;
   /** 메신저 모양에서 오른쪽(파란 말풍선)에 둘 캐릭터 — 보는 사람이 방에서 보던 그대로 (커플홈) */
   rightIds: string[];
+  /** 캐릭터 얼굴 사진 (프로필 사진 옵션용) */
+  faceInfo: FaceInfo;
   onClose: () => void;
 }) {
   const [time, setTime] = useState(false);
   // HTML 모양 — 메신저 방은 메신저 모양이 기본 (커플홈 사용자 요청: 저장해도 메신저 느낌이 나게)
   const [style, setStyle] = useState<'script' | 'imsg'>(room.style === 'imsg' ? 'imsg' : 'script');
+  /* 프로필 사진 (커플홈 사용자 요청) — 켜면 말한 캐릭터의 얼굴 주소를 홈 저장소에서 그대로 가져와 적는다 */
+  const [withFaces, setWithFaces] = useState(false);
+  const [faces, setFaces] = useState<Faces | null>(null);
+  const speakers = useMemo(() => rpSpeakers(msgs, chars), [msgs, chars]);
+  useEffect(() => {
+    if (!withFaces) { setFaces(null); return; }
+    let alive = true;
+    resolveFaces(speakers, faceInfo).then(f => { if (alive) setFaces(f); });
+    return () => { alive = false; };
+  }, [withFaces, speakers, faceInfo]);
+  const facesBusy = withFaces && !faces;
   const text = useMemo(() => rpLogText({ title: room.title, sub }, msgs, chars, { time }),
     [room.title, sub, msgs, chars, time]);
-  const html = () => rpLogHtml({ title: room.title, sub }, msgs, chars, { time, style, rightIds });
+  const faceOpt = style === 'imsg' && withFaces && faces ? faces : undefined;
+  const html = () => rpLogHtml({ title: room.title, sub }, msgs, chars, { time, style, rightIds, faces: faceOpt });
 
   // 파일은 방 제목으로. txt 앞의 BOM은 오래된 편집기에서도 한글이 깨지지 않게 하려는 것
   const saveTxt = () => downloadText(logFileName(room.title, 'txt'), `﻿${text}`, 'text/plain');
@@ -53,26 +95,34 @@ export function RpLogModal({ room, msgs, chars, sub, isAdmin, rightIds, onClose 
           </div>
           <small className="hint" style={{ margin: 0 }}>HTML 저장 · 전체보기 · RP LOG 본문에 쓰입니다 (TXT는 글만)</small>
         </div>
+        {style === 'imsg' && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <KCheck label="프로필 사진 넣기" checked={withFaces} onChange={setWithFaces} />
+            <small className="hint" style={{ margin: 0 }}>
+              {facesBusy ? '사진 주소를 불러오는 중…' : '상대 캐릭터 말풍선 옆에 얼굴 — 주소는 홈 저장소의 것을 그대로 씁니다'}
+            </small>
+          </div>
+        )}
         <div>
           <label className="k-label">미리보기</label>
           <pre className="rp-log-pre">{text}</pre>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn btn-dark" onClick={saveTxt}>⤓ TXT 저장</button>
-          <button className="btn btn-ghost" onClick={saveHtml}>⤓ HTML 저장</button>
-          <button className="btn btn-ghost" onClick={viewAll}>전체보기 ↗</button>
+          <button className="btn btn-ghost" disabled={facesBusy} onClick={saveHtml}>⤓ HTML 저장</button>
+          <button className="btn btn-ghost" disabled={facesBusy} onClick={viewAll}>전체보기 ↗</button>
           <small className="hint" style={{ margin: 0 }}>전체보기는 대화 전부를 새 탭 한 장에 펼칩니다</small>
         </div>
-        {isAdmin && <PostToTrpg room={room} msgs={msgs} chars={chars} sub={sub} time={time} style={style} rightIds={rightIds} />}
+        {isAdmin && <PostToTrpg room={room} msgs={msgs} chars={chars} sub={sub} time={time} style={style} rightIds={rightIds} faces={faceOpt} facesBusy={facesBusy} />}
       </div>
     </Modal>
   );
 }
 
 /** RP LOG 게시판에 올리기 — 관리자에게만 그려서, 참여자에게는 로그 목록을 불러오지도 않는다 */
-function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds }: {
+function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds, faces, facesBusy }: {
   room: RpRoom; msgs: RpMessage[]; chars: Character[]; sub: string; time: boolean;
-  style: 'script' | 'imsg'; rightIds: string[];
+  style: 'script' | 'imsg'; rightIds: string[]; faces?: Faces; facesBusy: boolean;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -101,7 +151,8 @@ function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds }: {
       const colors = speakers.map(c => c.color).filter(isHex);
       const info = { title: title.trim(), sub };
       const bodyText = fmt === 'html'
-        ? rpLogHtml(info, msgs, chars, { time, forBoard: true, style, rightIds })
+        // 게시판 본문은 좌우를 정하지 않는다 — 보는 사람에 따라 상세 페이지가 정한다 (커플홈 사용자 요청)
+        ? rpLogHtml(info, msgs, chars, { time, forBoard: true, style, rightIds, faces, neutralSides: true })
         : rpLogText(info, msgs, chars, { time, forBoard: true });
       const log: TrpgLog = {
         id,
@@ -165,9 +216,10 @@ function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds }: {
           ? '이 방의 자관에 연동되어 자관 페이지의 로그 목록에도 표시됩니다. '
           : ''}
         위의 시각 표시 설정이 본문에도 그대로 들어갑니다.
+        {style === 'imsg' ? ' 메신저 모양의 좌우는 보는 사람 기준입니다 — 관리자에게는 자캐가, 역극 참여 회원에게는 자기 캐릭터가 오른쪽.' : ''}
       </p>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button className="btn btn-dark" disabled={!ready || busy || !!postedId} onClick={post}>
+        <button className="btn btn-dark" disabled={!ready || busy || facesBusy || !!postedId} onClick={post}>
           {busy ? '올리는 중…' : postedId ? '올렸습니다' : !ready ? '불러오는 중…' : '＋ RP LOG에 올리기'}
         </button>
         {postedId && (

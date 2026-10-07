@@ -532,9 +532,9 @@ a{color:inherit;text-decoration:none}
 /* 보낸 캐릭터 이름 — 말풍선 왼쪽 끝에 맞춘다 (사용자 제보: 글씨 시작선(12px 안쪽)에 맞추니 떠 보였다) */
 .im-who{font-size:calc(10px*var(--fs,1));color:#8e8e93;margin:0 0 3px 4px;font-family:var(--sans-base);white-space:nowrap}
 .im-bub{position:relative;padding:7px 12px;border-radius:18px;font-size:calc(13px*var(--fs,1));line-height:1.45;white-space:pre-line;word-break:break-word;font-family:var(--sans-base);
-  background:#e9e9eb;color:#000;max-width:100%}
+  background:#e9e9eb;color:#000;max-width:100%;min-width:calc(13px*var(--fs,1) + 24px)}   /* 최소 폭 = 한글 한 글자 + 여백 (사용자 확정 — 「...」만 쳐도 찌그러지지 않게) */
 .im-msg.me .im-bub{background:#0b84ff;color:#fff}
-.im-bub.short{min-width:46px;text-align:center}   /* 한두 글자짜리 — 찌그러진 동그라미가 되지 않게 */
+.im-bub.short{text-align:center}   /* 두세 글자짜리는 가운데 */
 /* 묶음 안에서는 안쪽 모서리를 덜 둥글게 */
 .im-msg.them:not(.last) .im-bub{border-bottom-left-radius:5px}
 .im-msg.them:not(.first) .im-bub{border-top-left-radius:5px}

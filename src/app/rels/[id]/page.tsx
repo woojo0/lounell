@@ -19,7 +19,7 @@ import { RelQuestionSet, RELQ_SEED, RELQ_KEY, CP_LABEL } from '@/lib/relqStore';
 import { putBlob } from '@/lib/blobStore';
 import { GrantsEditor } from '@/components/chars/GrantsEditor';
 import { TrpgLog, TRPG_SEED } from '@/lib/galleryStore';
-import { RpRoom, RP_SEED, rpMemberIds } from '@/lib/rpStore';
+import { RpRoom, RP_SEED, rpMemberIds, RpMessageRow, RP_MSG_KEY, RP_MSG_SEED, messagesFor, rpLastDate } from '@/lib/rpStore';
 import { useFonts } from '@/lib/fontStore';
 import { useMainStore } from '@/lib/mainStore';
 import { useMenuSettings, removeFromTree, defaultTree } from '@/lib/menuStore';
@@ -259,6 +259,7 @@ export default function RelDetailPage() {
   const [chars, setChars, charsLoaded] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
   const [logs] = useLocalList<TrpgLog>('ohome.trpg.v1', TRPG_SEED);
   const [rooms] = useLocalList<RpRoom>('ohome.rp.v1', RP_SEED);
+  const [rpMsgs] = useLocalList<RpMessageRow>(RP_MSG_KEY, RP_MSG_SEED);   // 역극 목록을 최근 발화 순으로 (커플홈)
   const [tab, setTab] = useState<'tl' | 'qa'>('tl');
   const [auId, setAuId] = useState('base');
   const [oneMode, setOneMode] = useState<boolean | null>(null);
@@ -537,9 +538,11 @@ export default function RelDetailPage() {
   // 참여자는 역극 페이지와 같은 계산(rpMemberIds)으로 — 자관 기반 방은 저장된 memberIds에 개설자만 있어서
   // 상대 오너에게는 자기가 참여한 역극이 이 목록에 뜨지 않았다 (커플홈 작업 중 발견)
   const relRooms = useMemo(() => rooms.filter(rm => rm.relId === rel?.id && auKeyOf(rm.auId) === auId
-    && ((user && rpMemberIds(rm, rels, chars).includes(user.id)) || (rm.status === 'done' && rm.isPublic))),
+    && ((user && rpMemberIds(rm, rels, chars).includes(user.id)) || (rm.status === 'done' && rm.isPublic)))
+    // 최근에 발화가 있던 방이 위로 (커플홈 사용자 요청) — 역극 페이지의 방 목록과 같은 기준
+    .sort((a, b) => rpLastDate(b, messagesFor(rpMsgs, b.id, b.messages)).localeCompare(rpLastDate(a, messagesFor(rpMsgs, a.id, a.messages)))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rooms, rel, user, rels, chars, auId]);
+    [rooms, rel, user, rels, chars, auId, rpMsgs]);
 
   if (!loaded) return <section className="page" />;
   if (!rel || (rel.visibility === 'private' && !isAdmin) || (rel.visibility === 'member' && !user)) {

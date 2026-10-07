@@ -17,6 +17,7 @@ import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useToast } from '@/components/ui/Toast';
 import { RpLogModal } from '@/components/rp/RpLogModal';
 import { rpLogHtml, openLogWindow } from '@/lib/rpLog';
+import { isMsgSoundOn, setMsgSoundOn } from '@/lib/msgSound';
 import { Lightbox } from '@/components/ui/Lightbox';
 import { putBlob, BlobImg } from '@/lib/blobStore';
 
@@ -380,6 +381,9 @@ export default function RpPage() {
 
   // 로그 (커플홈) — txt/html 저장 · RP LOG에 올리기. 예전의 HTML 내보내기(EXPORT)를 대신한다
   const [logOpen, setLogOpen] = useState(false);
+  // 알림음 켬/끔 (커플홈) — 브라우저마다. 처음 그릴 때는 서버와 같은 값(켬)으로 두고 마운트 뒤 읽는다
+  const [soundOn, setSoundOn] = useState(true);
+  useEffect(() => { setSoundOn(isMsgSoundOn()); }, []);
   useEffect(() => { setLogOpen(false); }, [sel?.id]);
 
   if (!loaded) return <section className="page" />;
@@ -444,12 +448,17 @@ export default function RpPage() {
         <div className="panel rp-rooms">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 6px 12px', flexShrink: 0 }}>
             <b style={{ fontSize: 12, letterSpacing: '.1em', color: 'var(--sub)' }}>MY ROOMS</b>
-            <button className="btn btn-dark" style={{ padding: '0 12px', height: 30, fontSize: 11 }}
-              onClick={() => {
-                // 커플홈 — 기반 자관은 대표 자관(첫 번째)부터 골라 둔다. 자유 개설은 셀렉트에서
-                setNRel(rels[0]?.id ?? 'none'); setNAu('base');
-                setNewOpen(true);
-              }}>＋ NEW ROOM</button>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+              {/* 메시지 알림음 (커플홈) — 남의 새 발화가 오면 짧게 울린다. 브라우저마다 켜고 끈다 */}
+              <button className="btn btn-ghost rp-bell" data-tip={soundOn ? '알림음 끄기' : '알림음 켜기'}
+                onClick={() => { setMsgSoundOn(!soundOn); setSoundOn(!soundOn); }}>{soundOn ? '🔔' : '🔕'}</button>
+              <button className="btn btn-dark" style={{ padding: '0 12px', height: 30, fontSize: 11 }}
+                onClick={() => {
+                  // 커플홈 — 기반 자관은 대표 자관(첫 번째)부터 골라 둔다. 자유 개설은 셀렉트에서
+                  setNRel(rels[0]?.id ?? 'none'); setNAu('base');
+                  setNewOpen(true);
+                }}>＋ NEW ROOM</button>
+            </div>
           </div>
           <div className="rp-rooms-list">
             {myRooms.map(r => (

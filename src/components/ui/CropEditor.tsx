@@ -65,10 +65,15 @@ export function CroppedBlobImg({ fileRef, crop, ph, phStyle, label, alt }: {
   phStyle?: React.CSSProperties;
 }) {
   const url = useBlobUrl(fileRef);
-  if (!url) {
+  /* 참조가 바뀌어 새 주소를 받는 동안은 이전 그림을 그대로 둔다 (커플홈 사용자 제보 — 자관 그림 슬라이드를 넘길 때
+     자리표시자(어두운 그라데이션)가 한 번 번쩍였다). 참조를 아예 비우면 같이 비운다 */
+  const [kept, setKept] = useState<string | undefined>(url);
+  useEffect(() => { if (url) setKept(url); else if (!fileRef) setKept(undefined); }, [url, fileRef]);
+  const shown = url ?? kept;
+  if (!shown) {
     return <div className={`ph ${ph ?? ''}`} style={{ width: '100%', height: '100%', ...phStyle }}>{label && <span>{label}</span>}</div>;
   }
-  return <CropImg src={url} crop={crop} alt={alt} />;
+  return <CropImg src={shown} crop={crop} alt={alt} />;
 }
 
 export function CropEditor({ open, src, aspect, aspectLabel, initial, onClose, onApply }: {

@@ -5,7 +5,7 @@ import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import type { RpRoom, RpMessage } from '@/lib/rpStore';
 import type { Character, Visibility } from '@/lib/charStore';
-import { rpLogText, rpLogHtml, rpLogRange, rpLogLastDate, rpSpeakers, logFileName, downloadText } from '@/lib/rpLog';
+import { rpLogText, rpLogHtml, rpLogRange, rpLogLastDate, rpSpeakers, logFileName, downloadText, openLogWindow } from '@/lib/rpLog';
 import { useLocalList, newId } from '@/lib/postStore';
 import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, saveLogBody } from '@/lib/galleryStore';
 import { useSections, filterSection, secStamp, MAIN_SEC } from '@/lib/sectionStore';
@@ -15,22 +15,28 @@ import { useToast } from '@/components/ui/Toast';
 
 const isHex = (c?: string) => !!c && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(c);
 
-export function RpLogModal({ room, msgs, chars, sub, isAdmin, onClose }: {
+export function RpLogModal({ room, msgs, chars, sub, isAdmin, rightIds, onClose }: {
   room: RpRoom;
   msgs: RpMessage[];
   chars: Character[];       // 이 방에서 쓰는 캐릭터 — AU 방이면 AU 프로필로 바꿔 끼운 것
   sub: string;              // 방 소제목 (캐릭터 이름 둘 / 자관명 / 자유 개설)
   isAdmin: boolean;
+  /** 메신저 모양에서 오른쪽(파란 말풍선)에 둘 캐릭터 — 보는 사람이 방에서 보던 그대로 (커플홈) */
+  rightIds: string[];
   onClose: () => void;
 }) {
   const [time, setTime] = useState(false);
+  // HTML 모양 — 메신저 방은 메신저 모양이 기본 (커플홈 사용자 요청: 저장해도 메신저 느낌이 나게)
+  const [style, setStyle] = useState<'script' | 'imsg'>(room.style === 'imsg' ? 'imsg' : 'script');
   const text = useMemo(() => rpLogText({ title: room.title, sub }, msgs, chars, { time }),
     [room.title, sub, msgs, chars, time]);
+  const html = () => rpLogHtml({ title: room.title, sub }, msgs, chars, { time, style, rightIds });
 
   // 파일은 방 제목으로. txt 앞의 BOM은 오래된 편집기에서도 한글이 깨지지 않게 하려는 것
   const saveTxt = () => downloadText(logFileName(room.title, 'txt'), `﻿${text}`, 'text/plain');
-  const saveHtml = () => downloadText(logFileName(room.title, 'html'),
-    rpLogHtml({ title: room.title, sub }, msgs, chars, { time }), 'text/html');
+  const saveHtml = () => downloadText(logFileName(room.title, 'html'), html(), 'text/html');
+  // 전체보기 — 방 안에서는 최근 것만 잘라 보여 주므로, 전체는 새 탭에 한 장으로 (커플홈 사용자 요청)
+  const viewAll = () => openLogWindow(room.title, html());
 
   const range = rpLogRange(msgs);
   return (
@@ -39,6 +45,14 @@ export function RpLogModal({ room, msgs, chars, sub, isAdmin, onClose }: {
       actions={<button className="btn btn-ghost" onClick={onClose}>CLOSE</button>}>
       <div style={{ display: 'grid', gap: 12 }}>
         <KCheck label="시각 표시 (날짜가 바뀌는 곳에 구분선)" checked={time} onChange={setTime} />
+        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="cp-lb">HTML 모양</span>
+          <div className="mini-seg">
+            <button className={style === 'script' ? 'on' : ''} onClick={() => setStyle('script')}>대본</button>
+            <button className={style === 'imsg' ? 'on' : ''} onClick={() => setStyle('imsg')}>메신저</button>
+          </div>
+          <small className="hint" style={{ margin: 0 }}>HTML 저장 · 전체보기 · RP LOG 본문에 쓰입니다 (TXT는 글만)</small>
+        </div>
         <div>
           <label className="k-label">미리보기</label>
           <pre className="rp-log-pre">{text}</pre>
@@ -46,17 +60,19 @@ export function RpLogModal({ room, msgs, chars, sub, isAdmin, onClose }: {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn btn-dark" onClick={saveTxt}>⤓ TXT 저장</button>
           <button className="btn btn-ghost" onClick={saveHtml}>⤓ HTML 저장</button>
-          <small className="hint" style={{ margin: 0 }}>HTML은 캐릭터 테마색이 들어간 한 장짜리 문서입니다</small>
+          <button className="btn btn-ghost" onClick={viewAll}>전체보기 ↗</button>
+          <small className="hint" style={{ margin: 0 }}>전체보기는 대화 전부를 새 탭 한 장에 펼칩니다</small>
         </div>
-        {isAdmin && <PostToTrpg room={room} msgs={msgs} chars={chars} sub={sub} time={time} />}
+        {isAdmin && <PostToTrpg room={room} msgs={msgs} chars={chars} sub={sub} time={time} style={style} rightIds={rightIds} />}
       </div>
     </Modal>
   );
 }
 
 /** RP LOG 게시판에 올리기 — 관리자에게만 그려서, 참여자에게는 로그 목록을 불러오지도 않는다 */
-function PostToTrpg({ room, msgs, chars, sub, time }: {
+function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds }: {
   room: RpRoom; msgs: RpMessage[]; chars: Character[]; sub: string; time: boolean;
+  style: 'script' | 'imsg'; rightIds: string[];
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -85,7 +101,7 @@ function PostToTrpg({ room, msgs, chars, sub, time }: {
       const colors = speakers.map(c => c.color).filter(isHex);
       const info = { title: title.trim(), sub };
       const bodyText = fmt === 'html'
-        ? rpLogHtml(info, msgs, chars, { time, forBoard: true })
+        ? rpLogHtml(info, msgs, chars, { time, forBoard: true, style, rightIds })
         : rpLogText(info, msgs, chars, { time, forBoard: true });
       const log: TrpgLog = {
         id,
@@ -140,7 +156,7 @@ function PostToTrpg({ room, msgs, chars, sub, time }: {
             options={secs.map(s => ({ value: s.id, label: s.name }))} />
         )}
         <div className="mini-seg">
-          <button className={fmt === 'html' ? 'on' : ''} onClick={() => setFmt('html')}>테마색 HTML</button>
+          <button className={fmt === 'html' ? 'on' : ''} onClick={() => setFmt('html')}>{style === 'imsg' ? '메신저 HTML' : '테마색 HTML'}</button>
           <button className={fmt === 'text' ? 'on' : ''} onClick={() => setFmt('text')}>텍스트</button>
         </div>
       </div>

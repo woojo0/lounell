@@ -2,7 +2,7 @@
 // 역극 (4.9) — 실시간 채팅형. 방 개설(자관 기반/자유) · 참여자에게만 존재 노출 ·
 // 캐릭터 선택 발화(테마색 말풍선) · 지문(/desc) · 메시지 수정/삭제 · 완결/공개 전환 · 로그(txt/html 저장 · RP LOG 올리기)
 // ※ 실시간 송수신·입력 중 표시·참여자 전원 동의는 Supabase Realtime 연동 시 활성화 (현재 localStorage)
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useLayoutEffect, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '@/lib/auth';
 import { useLocalList, newId, LIST_QUIET_ERR_EVT } from '@/lib/postStore';
 import {
@@ -116,6 +116,40 @@ export default function RpPage() {
     const el = msgsRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [sel?.id, msgRows.length]);
+
+  /* 긴 방은 잘라서 보여 준다 (커플홈 사용자 요청 — 한 방이 너무 길어지면 렉). 글자 수 기준으로 최근 것부터
+     WINDOW_CHARS만큼(적어도 WINDOW_MIN개), 맨 위로 올리거나 「이전 대화 더보기」를 누르면 그만큼 더 보여 준다.
+     전체는 LOG → 전체보기(새 탭) */
+  const WINDOW_CHARS = 6000, WINDOW_MIN = 30;
+  const [moreChars, setMoreChars] = useState(0);
+  useEffect(() => { setMoreChars(0); }, [sel?.id]);
+  const allMsgs = sel ? msgsOf(sel) : [];
+  let visStart = allMsgs.length;
+  {
+    const budget = WINDOW_CHARS + moreChars;
+    let used = 0;
+    while (visStart > 0) {
+      used += (allMsgs[visStart - 1].text?.length ?? 0) + 24;
+      if (used > budget && allMsgs.length - (visStart - 1) > WINDOW_MIN) break;
+      visStart -= 1;
+    }
+  }
+  const visibleMsgs = allMsgs.slice(visStart);
+  const hiddenCount = visStart;
+  const keepScroll = useRef<number | null>(null);   // 더보기 전 scrollHeight — 끼워 넣은 만큼 내려 읽던 자리를 지킨다
+  const loadMore = () => {
+    const el = msgsRef.current;
+    if (el) keepScroll.current = el.scrollHeight;
+    setMoreChars(x => x + WINDOW_CHARS);
+  };
+  useLayoutEffect(() => {
+    const el = msgsRef.current;
+    if (el && keepScroll.current != null) { el.scrollTop += el.scrollHeight - keepScroll.current; keepScroll.current = null; }
+  }, [visStart]);
+  const onMsgsScroll = () => {
+    const el = msgsRef.current;
+    if (el && hiddenCount > 0 && el.scrollTop < 30 && keepScroll.current == null) loadMore();
+  };
 
   const [text, setText] = useState('');
   /* 입력 중 표시 (커플홈 사용자 요청 — 상대가 치고 있으면 「캐릭터 is typing...」) — 사람마다 문서 하나.
@@ -473,8 +507,12 @@ export default function RpPage() {
                 </div>
               </div>
 
-              <div className={`rp-msgs${imsg ? ' imsg' : ''}`} ref={msgsRef}>
-                {msgsOf(sel).map((m, mi, arr) => {
+              <div className={`rp-msgs${imsg ? ' imsg' : ''}`} ref={msgsRef} onScroll={onMsgsScroll}>
+                {/* 잘라 둔 이전 대화 (커플홈) — 맨 위로 올려도 이어진다 */}
+                {hiddenCount > 0 && (
+                  <button className="btn btn-ghost rp-more" onClick={loadMore}>이전 대화 더보기 ({hiddenCount})</button>
+                )}
+                {visibleMsgs.map((m, mi, arr) => {
                   const mine = m.authorId === user.id;
                   const acts = mine && (
                     <span className="m-act">
@@ -793,7 +831,8 @@ export default function RpPage() {
       {/* 역극 로그 — 열 때만 그린다 (게시판 목록도 그때 불러온다) */}
       {logOpen && sel && (
         <RpLogModal room={sel} msgs={msgsOf(sel)} chars={rpChars} sub={roomLabel(sel)}
-          isAdmin={isAdmin} onClose={() => setLogOpen(false)} />
+          isAdmin={isAdmin} onClose={() => setLogOpen(false)}
+          rightIds={user ? rpChars.filter(c => !!charGrant(c, user.id) || (!!c.own && isAdmin)).map(c => c.id) : []} />
       )}
 
       {/* 완결 확인 (삭제 아님 — END/CANCEL) */}

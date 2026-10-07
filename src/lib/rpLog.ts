@@ -14,6 +14,10 @@ export interface RpLogOpts {
   time: boolean;
   /** RP LOG 게시판 본문용 — 제목·캐릭터 이름은 게시판 상세가 이미 위에 보여 주므로 빼고 기간·개수만 */
   forBoard?: boolean;
+  /** HTML 모양 (커플홈 사용자 요청 — 메신저 방을 저장했는데 메신저 느낌이 없었다): 'imsg'면 아이폰 문자 말풍선 */
+  style?: 'script' | 'imsg';
+  /** 메신저 모양에서 오른쪽(파란 말풍선)에 둘 캐릭터 id — 저장하는 사람이 방에서 보던 그대로 */
+  rightIds?: string[];
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
@@ -84,8 +88,103 @@ const esc = (s: string) => s
 /** 스타일 속성에 넣어도 되는 색만 — 저장된 값이 이상하면 기본색 */
 const safeHex = (c?: string) => (c && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(c) ? c : '#5d636d');
 
-/** HTML 로그 — 한 장짜리 문서. 캐릭터 발화는 테마색 줄무늬 카드, 지문은 가운데 서술 */
+const DATE_RE = /^(\d{4}\s?[.\-/]\s?\d{1,2}\s?[.\-/]\s?\d{1,2}\.?)([\s\S]*)$/;
+const GAP = 30 * 60 * 1000;
+
+/** 메신저 모양 줄들 — 역극 페이지의 iMessage 표시와 같은 규칙: 같은 캐릭터가 이어 말하면 묶고(꼬리는 묶음 끝에만),
+ *  이름은 상대 쪽에서 말하는 캐릭터가 바뀔 때만, 날짜로 시작하는 지문은 날짜 줄, 「일반 RP」 글은 대본 카드 */
+function imsgRows(msgs: RpMessage[], chars: Character[], opts: RpLogOpts): string[] {
+  const right = new Set(opts.rightIds ?? []);
+  const rows: string[] = [];
+  let day = '';
+  msgs.forEach((m, i) => {
+    if (opts.time) {
+      const d = ymd(m.date);
+      if (d !== day) { day = d; rows.push(`<div class="sys date"><b>${d}</b></div>`); }
+    }
+    const txt = m.text || (m.imgId ? '[사진]' : '');
+    if (m.kind !== 'char') {
+      const dm = m.text.trim().match(DATE_RE);
+      rows.push(`<div class="sys${dm ? ' date' : ''}">${dm ? `<b>${esc(dm[1])}</b>${esc(dm[2])}` : esc(txt)}</div>`);
+      return;
+    }
+    const me = right.has(m.charId ?? '');
+    if (m.rp) {
+      const c = chars.find(x => x.id === m.charId);
+      const hex = safeHex(c?.color);
+      rows.push(`<div class="m${me ? ' me' : ''}" style="--c:${hex};--rgb:${hexRgb(hex)}"><div class="who">${esc(nameOf(chars, m.charId))}</div><div class="txt">${esc(txt)}</div></div>`);
+      return;
+    }
+    const prev = msgs[i - 1], next = msgs[i + 1];
+    const gap = !prev || Date.parse(m.date) - Date.parse(prev.date) > GAP;
+    const first = gap || prev.kind !== 'char' || prev.charId !== m.charId || !!prev.rp;
+    const last = !next || next.kind !== 'char' || next.charId !== m.charId || !!next.rp || Date.parse(next.date) - Date.parse(m.date) > GAP;
+    const nameNeeded = !prev || prev.kind !== 'char' || prev.charId !== m.charId;
+    const short = m.text.trim().length > 0 && m.text.trim().length <= 2;
+    rows.push(`<div class="b ${me ? 'me' : 'them'}${first ? ' first' : ''}${last ? ' last' : ''}">${!me && nameNeeded ? `<div class="n">${esc(nameOf(chars, m.charId))}</div>` : ''}<div class="bub${short ? ' short' : ''}">${esc(txt)}</div></div>`);
+  });
+  return rows;
+}
+
+const IMSG_CSS = `
+body{margin:0;background:#f2f2f7;color:#111;font-family:-apple-system,'Pretendard','Noto Sans KR','Apple SD Gothic Neo','Malgun Gothic',system-ui,sans-serif;font-size:14px}
+.log{max-width:560px;margin:0 auto;padding:28px 16px 44px}
+.hd{text-align:center;margin-bottom:18px;padding-bottom:14px;border-bottom:1px solid #e3e3df}
+.hd h1{font-size:19px;letter-spacing:.06em;margin:0 0 6px;font-weight:700}
+.hd .sub{font-size:12.5px;color:#666b74;letter-spacing:.08em}
+.hd .meta{font-size:11px;color:#9a9ea6;margin-top:5px;letter-spacing:.04em}
+.chat{display:flex;flex-direction:column;gap:2px;background:#fff;border-radius:18px;padding:16px 14px}
+.sys{align-self:center;text-align:center;max-width:82%;font-size:11.5px;line-height:1.7;color:#8e8e93;margin:6px 0;white-space:pre-wrap;word-break:break-word}
+.sys.date{margin:16px 0 8px;font-size:11px}
+.sys.date b{font-weight:700;margin-right:4px}
+.b{display:flex;flex-direction:column;max-width:72%;position:relative}
+.b.them{align-self:flex-start;align-items:flex-start;margin-left:8px}
+.b.me{align-self:flex-end;align-items:flex-end;margin-right:8px}
+.b.first{margin-top:8px}
+.n{font-size:10px;color:#8e8e93;margin:0 0 3px 4px}
+.bub{position:relative;padding:7px 12px;border-radius:18px;font-size:13px;line-height:1.45;white-space:pre-wrap;word-break:break-word;background:#e9e9eb;color:#000;max-width:100%}
+.b.me .bub{background:#0b84ff;color:#fff}
+.bub.short{min-width:46px;text-align:center}
+.b.them:not(.last) .bub{border-bottom-left-radius:5px}
+.b.them:not(.first) .bub{border-top-left-radius:5px}
+.b.me:not(.last) .bub{border-bottom-right-radius:5px}
+.b.me:not(.first) .bub{border-top-right-radius:5px}
+.b.last .bub::before{content:"";position:absolute;bottom:0;width:20px;height:20px;z-index:0}
+.b.them.last .bub::before{left:-7px;background:#e9e9eb;border-bottom-right-radius:15px}
+.b.me.last .bub::before{right:-8px;background:#0b84ff;border-bottom-left-radius:15px}
+.b.last .bub::after{content:"";position:absolute;bottom:0;width:10px;height:20px;background:#fff;z-index:1}
+.b.them.last .bub::after{left:-10px;border-bottom-right-radius:10px}
+.b.me.last .bub::after{right:-10px;border-bottom-left-radius:10px}
+.m{align-self:flex-start;max-width:82%;margin:10px 0;padding:9px 14px 10px;border-left:3px solid var(--c);background:rgba(var(--rgb),.08);border-radius:0 10px 10px 0}
+.m.me{align-self:flex-end;border-left:none;border-right:3px solid var(--c);border-radius:10px 0 0 10px}
+.m .who{font-size:12px;font-weight:700;color:var(--c);letter-spacing:.05em;margin-bottom:3px}
+.m .txt{white-space:pre-wrap;word-break:break-word;line-height:1.75}
+`;
+
+/** HTML 로그 — 한 장짜리 문서. 기본(대본 모양)은 캐릭터 발화가 테마색 줄무늬 카드, 지문은 가운데 서술.
+ *  메신저 모양(opts.style 'imsg')은 아이폰 문자 말풍선 — 역극 페이지에서 보던 그대로 */
 export function rpLogHtml(info: RpLogInfo, msgs: RpMessage[], chars: Character[], opts: RpLogOpts): string {
+  if (opts.style === 'imsg') {
+    const meta = [rpLogRange(msgs), `대화 ${msgs.length}개`].filter(Boolean).join(' · ');
+    return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(info.title)}</title>
+<style>${IMSG_CSS}</style>
+</head>
+<body>
+<div class="log">
+<div class="hd">${opts.forBoard ? '' : `<h1>${esc(info.title)}</h1>${info.sub ? `<div class="sub">${esc(info.sub)}</div>` : ''}`}${meta ? `<div class="meta">${esc(meta)}</div>` : ''}</div>
+<div class="chat">
+${imsgRows(msgs, chars, opts).join('\n')}
+</div>
+</div>
+</body>
+</html>
+`;
+  }
   const rows: string[] = [];
   let day = '';
   for (const m of msgs) {
@@ -133,6 +232,15 @@ ${rows.join('\n')}
 </body>
 </html>
 `;
+}
+
+/** 로그 전체를 새 탭에서 한 장으로 (커플홈 사용자 요청 — 방 안에서는 잘라서 보여 주므로 전체는 여기서).
+ *  팝업이 막히면 파일로 내려받는다 */
+export function openLogWindow(title: string, html: string): void {
+  const u = URL.createObjectURL(new Blob([html], { type: 'text/html;charset=utf-8' }));
+  const w = window.open(u, '_blank');
+  if (!w) downloadText(logFileName(title, 'html'), html, 'text/html');
+  setTimeout(() => URL.revokeObjectURL(u), 60_000);
 }
 
 /** 파일 이름으로 못 쓰는 문자를 걷어 낸다 (윈도 금지 문자 포함) */

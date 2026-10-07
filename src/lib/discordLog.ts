@@ -13,21 +13,36 @@ export interface DcMessage { speaker: string; date: string; text: string }
 export interface DcSpeaker { name: string; count: number }
 export interface DcParsed { messages: DcMessage[]; speakers: DcSpeaker[] }
 
-const TS = /(?:(\d{4})\s?[.\-/]\s?(\d{1,2})\s?[.\-/]\s?(\d{1,2})\.?|(오늘|어제|today|yesterday))[\s,]*(?:(오전|오후|AM|PM|am|pm)\s*)?(\d{1,2}):(\d{2})(?:\s*(AM|PM|am|pm))?/;
+// 시각 — **날짜는 없을 수도 있다** (커플홈 사용자 제보: 디스코드는 당일 메시지에 「 — 오전 1:44」처럼 시각만 적는다.
+// 날짜를 필수로 보던 때는 그 줄이 머리로 안 읽혀 「이름/앱/— 오전 1:44」가 앞 발화의 본문 끝에 그대로 남았다). 시각만이면 오늘.
+// 받는 꼴: 2026-10-08 · 2026.10.08. · 2026/10/08 · 10/08/2026(영문) · 오늘/어제 · Today at / Yesterday at · 오전/오후 · AM/PM · 24시
+const TS = new RegExp(
+  '(?:'
+  + '(?<y>\\d{4})\\s?[.\\-/]\\s?(?<mo>\\d{1,2})\\s?[.\\-/]\\s?(?<d>\\d{1,2})\\.?'
+  + '|(?<mo2>\\d{1,2})/(?<d2>\\d{1,2})/(?<y2>\\d{4})'
+  + '|(?<rel>오늘|어제|today|yesterday)'
+  + ')?'
+  + '[\\s,]*(?:at\\s+)?(?:(?<ap1>오전|오후|AM|PM)\\s*)?(?<h>\\d{1,2}):(?<mi>\\d{2})(?:\\s*(?<ap2>AM|PM))?',
+  'i',
+);
 const TAG = /^(앱|APP|BOT|봇)$/i;
+/** 디스코드 이름은 32자까지 — 긴 본문 줄이 이름으로 오인되지 않게 */
+const NAME_MAX = 32;
 
-/** 시각 문자열 → ISO. 「오늘/어제」는 지금 날짜 기준, 오전/오후·AM/PM 모두 받는다 */
+/** 시각 문자열 → ISO. 날짜가 없으면 오늘, 「어제」는 하루 전, 오전/오후·AM/PM 모두 받는다 */
 function toIso(m: RegExpMatchArray): string {
+  const g = (m.groups ?? {}) as Record<string, string | undefined>;
   const now = new Date();
   let y = now.getFullYear(), mo = now.getMonth() + 1, d = now.getDate();
-  if (m[1]) { y = +m[1]; mo = +m[2]; d = +m[3]; }
-  else if (/어제|yesterday/i.test(m[4] ?? '')) {
+  if (g.y) { y = +g.y; mo = +(g.mo ?? 1); d = +(g.d ?? 1); }
+  else if (g.y2) { y = +g.y2; mo = +(g.mo2 ?? 1); d = +(g.d2 ?? 1); }
+  else if (/어제|yesterday/i.test(g.rel ?? '')) {
     const t = new Date(now); t.setDate(t.getDate() - 1);
     y = t.getFullYear(); mo = t.getMonth() + 1; d = t.getDate();
   }
-  let hh = +m[6];
-  const mm = +m[7];
-  const ap = (m[5] ?? m[8] ?? '').toLowerCase();
+  let hh = +(g.h ?? '0');
+  const mm = +(g.mi ?? '0');
+  const ap = (g.ap1 ?? g.ap2 ?? '').toLowerCase();
   if (ap === '오후' || ap === 'pm') { if (hh < 12) hh += 12; }
   else if (ap === '오전' || ap === 'am') { if (hh === 12) hh = 0; }
   const dt = new Date(y, mo - 1, d, hh, mm);
@@ -41,6 +56,8 @@ export function parseDiscordLog(raw: string): DcParsed {
   const push = () => {
     if (cur) {
       cur.text = cur.text.replace(/^\n+|\n+$/g, '').replace(/\n{3,}/g, '\n\n');
+      // 「-」(구분선 봇)은 본문이 없어도 구분선으로 남긴다 — 복사본 끝에 머리만 남은 경우 (사용자 제보)
+      if (!cur.text && cur.speaker.trim() === '-') cur.text = '-';
       if (cur.text) msgs.push(cur);
     }
     cur = null;
@@ -49,7 +66,7 @@ export function parseDiscordLog(raw: string): DcParsed {
     const line = lines[i];
     const t = line.trim();
     // (a) 「이름」 / [앱] / 「 — 시각」 — 두세 줄짜리 머리. 시각 줄 자체(— 로 시작)는 이름이 될 수 없다
-    if (t && !/^[—–]\s/.test(t) && i + 1 < lines.length) {
+    if (t && t.length <= NAME_MAX && !/^[—–]\s/.test(t) && i + 1 < lines.length) {
       let j = i + 1;
       if (TAG.test(lines[j].trim()) && j + 1 < lines.length) j += 1;
       const m = /^[—–]\s*(.+)$/.exec(lines[j].trim());
@@ -63,7 +80,7 @@ export function parseDiscordLog(raw: string): DcParsed {
     }
     // (b) 「이름 — 시각」 한 줄짜리 머리
     const one = /^(.+?)\s+[—–]\s+(.+)$/.exec(t);
-    if (one) {
+    if (one && one[1].length <= NAME_MAX) {
       const ts = TS.exec(one[2]);
       if (ts && one[2].replace(TS, '').trim() === '') {
         push();

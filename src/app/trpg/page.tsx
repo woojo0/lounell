@@ -28,6 +28,7 @@ import { DiscordPanel, DC_DEFAULT, dcUnmapped, dcReady, type DcOptions } from '@
 import { parseDiscordLog, dcToMessages } from '@/lib/discordLog';
 import { rpLogLastDate, rpLogSrcFits, type RpLogSrc } from '@/lib/rpLog';
 import { renderLogSrc, logViewChars } from '@/lib/rpLogSrc';
+import { fetchLogUrl } from '@/lib/logFetch';
 
 function TrpgPageInner() {
   const router = useRouter();
@@ -97,10 +98,16 @@ function TrpgPageInner() {
     if (r) setFilter(q.get('au') ? `${r}:${q.get('au')}` : r);
   }, []);
   const [nDate, setNDate] = useState('');
-  const [nMode, setNMode] = useState<'file' | 'paste'>('paste');
+  const [nMode, setNMode] = useState<'file' | 'paste' | 'url'>('paste');
   const [nBody, setNBody] = useState('');
   const [nFileName, setNFileName] = useState('');
   const [nFile, setNFile] = useState<File | null>(null);
+  // 로그 주소로 (커플홈 사용자 요청 — "로그 주소도 입력할 수 있게") — 서버가 대신 받아 와 본문으로 보관하고(logFetch) 주소도 남긴다.
+  // 못 받아 오면 주소만 저장 — 상세가 그 주소를 그대로 끼워 보여 준다
+  const [nUrl, setNUrl] = useState('');
+  const [nUrlOf, setNUrlOf] = useState('');               // 지금 본문을 만든(또는 시도한) 주소 — sourceUrl로 저장
+  const [nUrlState, setNUrlState] = useState<'idle' | 'loaded' | 'failed'>('idle');
+  const [nUrlBusy, setNUrlBusy] = useState(false);
   /* 디스코드 복사본 자동 판별 (커플홈 사용자 요청 — 따로 「가져오기」 버튼 없이 붙여넣기·직접 작성·파일 첨부에서 알아서):
      본문 글이 HTML이 아니고 parseDiscordLog가 발화를 찾으면 변환 패널을 띄운다. 판별이 틀렸으면 패널에서 「글 그대로」 */
   const dcParsed = useMemo(() => (nBody.trim() && !isHtmlBody(nBody) ? parseDiscordLog(nBody) : null), [nBody]);
@@ -226,8 +233,28 @@ function TrpgPageInner() {
     if (!f) return;
     setNFileName(f.name);
     setNFile(f); // 원본 파일 보관용 (4.3)
+    setNUrlOf(''); setNUrlState('idle');   // 파일을 올리면 주소로 받은 것은 잊는다
     // 미리보기 글자 수 표시용 — 등록 시에는 파일에서 직접 다시 읽으므로 레이스 없음
     decodeText(f).then(setNBody);
+  };
+
+  /** 주소에서 받아 오기 — 내용은 본문(nBody, HTML이면 <base> 포함)·원본 파일(nFile)로, 페이지 제목은 타이틀이 비어 있을 때 채운다 */
+  const loadUrl = async () => {
+    const u = nUrl.trim();
+    if (!u || nUrlBusy) return;
+    setNUrlBusy(true);
+    try {
+      const r = await fetchLogUrl(u);
+      setNFile(r.file); setNFileName(r.file.name); setNBody(r.text);
+      setNUrlOf(u); setNUrlState('loaded');
+      if (!nTitle.trim() && r.title) setNTitle(r.title);
+    } catch {
+      setNFile(null); setNFileName(''); setNBody('');
+      setNUrlOf(u); setNUrlState('failed');
+      toast('주소에서 불러오지 못했습니다 — 이대로 등록하면 주소만 저장됩니다');
+    } finally {
+      setNUrlBusy(false);
+    }
   };
 
   const add = async () => {
@@ -236,7 +263,8 @@ function TrpgPageInner() {
     if (dcMode && !dcReady(rels, nRel, dc)) { toast('자관의 AU(또는 원본 설정)를 먼저 골라 주세요'); return; }
     const id = newId();
     // 파일이 있으면 등록 시점에 직접 읽음 — 읽기 완료 전에 ADD를 눌러도 본문이 비지 않음
-    const rawText = nFile ? await decodeText(nFile) : nBody;
+    // 파일 업로드만 파일에서 다시 읽는다 — 주소로 받은 것은 <base>를 끼운 nBody 쪽을, 붙여넣기는 보이는 글 그대로
+    const rawText = nMode === 'file' && nFile ? await decodeText(nFile) : nBody;
     const relId = nRel === 'none' ? undefined : nRel;
     const auId = relId && nAu !== 'base' ? nAu : undefined;   // 그 자관의 AU (커플홈)
     // 디스코드 복사본이면 매칭대로 발화를 만들어 역극 모양으로 그린다 — 원본 발화(src)도 남겨 「본문 편집」이 되게.
@@ -280,6 +308,7 @@ function TrpgPageInner() {
       // 등록자 · 수정 가능 회원(등록 권한이 있는 회원 전원 — trpgPerm.ts)
       authorId: user?.id,
       editorIds: trpgEditorIds(menuSet, sec.id, members),
+      sourceUrl: nUrlOf || undefined,   // 주소로 등록했으면 그 주소 (받아 오지 못했어도 남긴다)
     };
     // 본문·원본 파일은 별도 문서로 (v2.0) — 목록 문서(log)와 같은 곳에 있으면 나만보기여도
     // 목록에 뜨는 순간 함께 새어 나간다. 이 문서의 열람 권한은 로그의 실제 visibility를 그대로 따른다
@@ -307,6 +336,7 @@ function TrpgPageInner() {
     setNNo(''); setNVis('public'); setNPw(''); setNListHidden(false); setNTitle(''); setNCatch(''); setNWriter(''); setNWith(''); setNBody(''); setNFileName(''); setNDate(''); setNFile(null);
     setNThumb(null); setNThumbUrl(''); setNThumbCrop(undefined);
     setDc(DC_DEFAULT);
+    setNUrl(''); setNUrlOf(''); setNUrlState('idle');
     toast(dcMode
       ? `디스코드 로그를 역극 모양으로 등록했습니다${nFile ? ' — 원본 파일도 보관됩니다' : ''}`
       : nFile ? '로그가 등록되었습니다 — 원본 파일도 보관됩니다' : '로그가 등록되었습니다');
@@ -455,7 +485,7 @@ function TrpgPageInner() {
 
       {/* ＋ ADD LOG (4.3 — 본문 입력 3방식) */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="로그 등록"
-        desc="본문: 파일 업로드(.txt/.html — 내용 자동 판별) 또는 붙여넣기/직접 작성 · 디스코드 복사본(붙여 넣기·txt)은 알아서 역극 로그로"
+        desc="본문: 파일 업로드(.txt/.html — 내용 자동 판별) 또는 붙여넣기/직접 작성 · 로그 페이지 주소로도 · 디스코드 복사본(붙여 넣기·txt)은 알아서 역극 로그로"
         actions={<>
           <button className="btn btn-ghost" onClick={() => setAddOpen(false)}>CANCEL</button>
           <button className="btn btn-dark" onClick={add}>ADD</button>
@@ -557,8 +587,27 @@ function TrpgPageInner() {
           <div className="mini-seg" style={{ justifySelf: 'start' }}>
             <button className={nMode === 'paste' ? 'on' : ''} onClick={() => setNMode('paste')}>붙여넣기/직접 작성</button>
             <button className={nMode === 'file' ? 'on' : ''} onClick={() => setNMode('file')}>파일 업로드</button>
+            <button className={nMode === 'url' ? 'on' : ''} onClick={() => setNMode('url')}>주소 입력</button>
           </div>
-          {nMode === 'file' ? (
+          {nMode === 'url' ? (
+            /* 로그 페이지 주소 (커플홈 사용자 요청) — 서버가 받아 와 본문으로 보관, 주소도 남긴다 */
+            <div style={{ display: 'grid', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <KInput placeholder="https:// 로그 페이지 주소" value={nUrl} onChange={e => setNUrl(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); loadUrl(); } }} style={{ flex: 1 }} />
+                <button className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} disabled={nUrlBusy || !nUrl.trim()} onClick={loadUrl}>
+                  {nUrlBusy ? '불러오는 중…' : '불러오기'}
+                </button>
+              </div>
+              <small className="hint" style={{ margin: 0 }}>
+                {nUrlState === 'loaded'
+                  ? `${nFileName} — 읽기 완료 (${nBody.length.toLocaleString()}자) · 내용이 본문으로 보관되고 주소도 함께 남습니다`
+                  : nUrlState === 'failed'
+                    ? '불러오지 못했습니다 — 이대로 등록하면 주소만 저장되고, 상세에서 그 페이지를 그대로 끼워 보여 줍니다'
+                    : '웹에 올라간 로그 페이지(크리스탈리아·코코포리아 내보내기 등)의 주소 — 내용을 받아 본문으로 보관합니다'}
+              </small>
+            </div>
+          ) : nMode === 'file' ? (
             <>
               <input ref={fileRef} type="file" accept=".txt,.html,.htm,text/*" style={{ display: 'none' }}
                 onChange={e => { readFile(e.target.files?.[0]); e.target.value = ''; }} />

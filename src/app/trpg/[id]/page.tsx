@@ -15,6 +15,7 @@ import { useMembers } from '@/lib/members';
 import { canEditTrpg, trpgEditorIds } from '@/lib/trpgPerm';
 import { logViewChars, renderLogSrc } from '@/lib/rpLogSrc';
 import { LogSrcEditor } from '@/components/rp/LogSrcEditor';
+import { fetchLogUrl } from '@/lib/logFetch';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { getBlob, putBlob, useBlobUrl } from '@/lib/blobStore';
 import { PageTitle, EditableDesc } from '@/components/ui/PageText';
@@ -116,12 +117,24 @@ export default function TrpgDetailPage() {
     listHidden: false,   // 목록 표시 여부 (v2.0 — 접근권한과 별개)
   });
   // 본문 교체
-  const [bodyMode, setBodyMode] = useState<'keep' | 'file' | 'text'>('keep');
+  const [bodyMode, setBodyMode] = useState<'keep' | 'file' | 'text' | 'url'>('keep');
   // 본문 표시 방식 (v2.0) — 자동 판별이 직접 쓴 글을 HTML로 오판하는 경우가 있어 직접 고를 수 있게
   const [bodyDisp, setBodyDisp] = useState<'auto' | 'text' | 'html'>('auto');
   const [eFile, setEFile] = useState<File | null>(null);
   const [eText, setEText] = useState('');
   const eFileRef = useRef<HTMLInputElement>(null);
+  // 로그 주소로 교체 (커플홈 사용자 요청) — 받아 온 내용으로 본문을 갈아 끼우고 주소도 남긴다 (logFetch)
+  const [eUrl, setEUrl] = useState('');
+  const [eUrlData, setEUrlData] = useState<{ file: File; text: string } | null>(null);
+  const [eUrlBusy, setEUrlBusy] = useState(false);
+  const loadEUrl = async () => {
+    const u = eUrl.trim();
+    if (!u || eUrlBusy) return;
+    setEUrlBusy(true);
+    try { const r = await fetchLogUrl(u); setEUrlData({ file: r.file, text: r.text }); }
+    catch { setEUrlData(null); toast('주소에서 불러오지 못했습니다 — 저장하면 주소만 남습니다'); }
+    finally { setEUrlBusy(false); }
+  };
   const eThumbRef = useRef<HTMLInputElement>(null);
   // 썸네일 교체
   const [thumbMode, setThumbMode] = useState<'keep' | 'image' | 'color'>('keep');
@@ -209,6 +222,12 @@ export default function TrpgDetailPage() {
       };
     } else if (bodyMode === 'text' && eText.trim()) {
       bodyPatch = await saveLogBody(eText);
+    } else if (bodyMode === 'url' && eUrlData) {
+      // 주소에서 받아 온 내용(<base> 포함)으로 — 받은 원본 바이트는 원본 파일로 보관
+      bodyPatch = {
+        ...(await saveLogBody(eUrlData.text)),
+        originalFileId: await putBlob(eUrlData.file), originalName: eUrlData.file.name,
+      };
     }
     // 썸네일 교체 준비
     let thumbPatch: Partial<TrpgLog> = {};
@@ -230,6 +249,7 @@ export default function TrpgDetailPage() {
       date: e.date || undefined,
       visibility: e.visibility, password: e.password.trim() || undefined,
       listHidden: e.listHidden,
+      sourceUrl: bodyMode === 'url' && eUrl.trim() ? eUrl.trim() : l?.sourceUrl,   // 주소로 교체했으면 그 주소 (받아 오지 못했어도)
       editorIds: trpgEditorIds(menuSet, l?.secId ?? MAIN_SEC, members, l?.editorIds),   // 등록 권한이 있는 회원 = 수정 가능 (저장할 때마다 최신으로)
       ...thumbPatch,
       // 예전엔 본문이 이 문서에 있었다 — 저장할 때마다 확실히 비워서(구버전 잔재 정리),
@@ -260,7 +280,7 @@ export default function TrpgDetailPage() {
     setBodies(bd ? bodies.map(x => x.id === id ? nextBody : x) : [...bodies, nextBody]);
     if (bodyMode !== 'keep') setBodyText(null); // 본문 다시 로드
     setEOpen(false);
-    setBodyMode('keep'); setEFile(null); setEText('');
+    setBodyMode('keep'); setEFile(null); setEText(''); setEUrlData(null);
     setThumbMode('keep'); setEThumb(null); setEThumbUrl(''); setEThumbCrop(undefined);
     toast('저장되었습니다');
   };
@@ -350,7 +370,9 @@ export default function TrpgDetailPage() {
   const origName = bd?.originalName ?? l.originalName;
   // 본문이 없을 때 대신 띄울 수 있는 서버 파일 주소 (v2.0 포크 제보 — 본문 저장 실패 대비)
   const fallbackUrl = [bd?.bodyId, l.bodyId, origFileId]
-    .find(x => typeof x === 'string' && /^https?:/.test(x));
+    .find(x => typeof x === 'string' && /^https?:/.test(x))
+    // 주소만 저장된 로그(받아 오지 못한 것, 커플홈) — 그 페이지를 그대로 끼워 보여 준다
+    ?? (l.sourceUrl && /^https?:/.test(l.sourceUrl) ? l.sourceUrl : undefined);
   // iframe 기본 body 마진 제거(흰 테두리 방지) + 높이 리포터 주입
   // 크리스탈리아/크릿 계열 로그는 본문을 JS로 그리므로 스크립트 실행이 필요 —
   // 널 오리진 샌드박스(allow-scripts만)라 사이트 쿠키·DOM 접근은 불가 (6.3의 격리 목적 유지)
@@ -428,6 +450,7 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
             // 본문·썸네일 교체 상태 초기화 (기본: 현재 것 유지)
             setBodyMode('keep'); setEFile(null); setEText(bodyText ?? '');
             if (bd?.src) { setEStyle(bd.src.style); setEFmt(bd.src.fmt); setEFaces(bd.src.faces); }
+            setEUrl(l.sourceUrl ?? ''); setEUrlData(null);
             const bh = bd?.bodyHtml ?? l.bodyHtml;
             setBodyDisp(bh === undefined ? 'auto' : bh ? 'html' : 'text');
             // 「현재 유지」에서도 위치·확대를 조정할 수 있게 지금 크롭값에서 시작한다
@@ -484,7 +507,11 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
               ? (
                 <>
                   <iframe className="log-frame" sandbox="allow-scripts" src={fallbackUrl} title={l.title} />
-                  <p className="hint" style={{ marginTop: 6 }}>본문 문서를 불러오지 못해 보관된 원본 파일로 표시하고 있습니다 — 수정 화면에서 본문을 다시 저장하면 원래대로 돌아갑니다</p>
+                  <p className="hint" style={{ marginTop: 6 }}>
+                    {fallbackUrl === l.sourceUrl
+                      ? '주소만 저장된 로그라 그 페이지를 그대로 끼워 보여 주고 있습니다 — 사이트가 끼워 넣기를 막아 두면 비어 보이니 아래 「원본 주소」로 여세요'
+                      : '본문 문서를 불러오지 못해 보관된 원본 파일로 표시하고 있습니다 — 수정 화면에서 본문을 다시 저장하면 원래대로 돌아갑니다'}
+                  </p>
                 </>
               )
               : (
@@ -497,6 +524,13 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
         )}
         {/* 설명문 없이 원본 파일 다운로드 링크만 (4.3 백업) */}
         <p className="hint" style={{ marginTop: 10 }}>
+          {/* 주소로 등록한 로그 — 원본 페이지 링크 (커플홈) */}
+          {l.sourceUrl && (
+            <a href={l.sourceUrl} target="_blank" rel="noreferrer"
+              style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'none', marginRight: 14 }}>
+              ↗ 원본 주소
+            </a>
+          )}
           {origFileId && (
             /^https?:/.test(origFileId)
               // 서버에 올라간 파일은 링크로 연다 — fetch로 받으면 버킷 CORS 설정이 필요해진다
@@ -664,7 +698,24 @@ html,body{margin:0!important;padding:0!important;height:auto!important;min-heigh
             {/* 아래 표시 방식 세그는 본문 교체와 별개 — 저장하면 항상 반영된다 */}
             <button className={bodyMode === 'text' ? 'on' : ''} onClick={() => { setBodyMode('text'); if (!eText) setEText(bodyText ?? ''); }}>직접 수정</button>
             <button className={bodyMode === 'file' ? 'on' : ''} onClick={() => setBodyMode('file')}>파일 업로드</button>
+            <button className={bodyMode === 'url' ? 'on' : ''} onClick={() => setBodyMode('url')}>주소 입력</button>
           </div>
+          {bodyMode === 'url' && (
+            <div style={{ display: 'grid', gap: 6 }}>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <KInput placeholder="https:// 로그 페이지 주소" value={eUrl} onChange={ev => setEUrl(ev.target.value)}
+                  onKeyDown={ev => { if (ev.key === 'Enter') { ev.preventDefault(); loadEUrl(); } }} style={{ flex: 1 }} />
+                <button className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} disabled={eUrlBusy || !eUrl.trim()} onClick={loadEUrl}>
+                  {eUrlBusy ? '불러오는 중…' : '불러오기'}
+                </button>
+              </div>
+              <small className="hint" style={{ margin: 0 }}>
+                {eUrlData
+                  ? `${eUrlData.file.name} — 읽기 완료 (${eUrlData.text.length.toLocaleString()}자) · 저장 시 이 내용으로 본문이 교체되고 주소도 남습니다`
+                  : '불러오기를 누르면 내용을 받아 옵니다 · 못 받아 오면 저장 시 주소만 남습니다'}
+              </small>
+            </div>
+          )}
           {bodyMode === 'file' && (
             <>
               <input ref={eFileRef} type="file" accept=".txt,.html,.htm,text/*" style={{ display: 'none' }}

@@ -129,7 +129,7 @@ export function DiscordPanel({ parsed, rels, relId, auId, onRel, onAu, relChars,
                 ))}
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                   <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10.5 }}
-                    onClick={() => window.open('/chars/new?next=/trpg', '_blank')}>＋ 캐릭터 추가 (새 탭)</button>
+                    onClick={() => window.open('/chars/new?next=/log', '_blank')}>＋ 캐릭터 추가 (새 탭)</button>
                   <small className="hint" style={{ margin: 0 }}>
                     맞는 캐릭터가 없으면 새 탭에서 등록한 뒤 여기 목록에서 고르면 됩니다 · 지문(서술)이나 제외로 둘 수도
                     {unmapped.length > 0 && <> · <span style={{ color: 'var(--accent)' }}>아직 정하지 않은 발화자 {unmapped.length}명</span></>}

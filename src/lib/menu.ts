@@ -18,7 +18,7 @@ export const FEATURES: { href: string; label: string }[] = [
   { href: '/videos', label: 'Videos' },   // 영상 게시판 (커플홈)
   { href: '/loadb', label: '로드비' },
   { href: '/tchars', label: '캐릭터' },   // TRPG 캐릭터 — 자놀 캐릭터와는 href로 구분
-  { href: '/trpg', label: 'RP LOG' },   // 로그 백업 — 커플홈에서 이름을 RP LOG로 (주소는 /trpg 그대로)
+  { href: '/log', label: 'RP LOG' },    // 로그 백업 — 커플홈에서 이름을 RP LOG로, 주소도 /log 로 (옛 /trpg 는 자동 이동)
   { href: '/dotori', label: '도토리' },
   { href: '/playlog', label: '플레이기록' },
   { href: '/cal', label: '스케줄러' },
@@ -34,7 +34,7 @@ export const DEFAULT_MENU: MenuItem[] = [
     children: [
       { label: '자관', href: '/rels' },
       { label: '역극', href: '/rp' },
-      { label: 'RP LOG', href: '/trpg' },   // 역극 로그를 올리는 곳이라 역극 옆에 (원래 TRPG 그룹)
+      { label: 'RP LOG', href: '/log' },    // 역극 로그를 올리는 곳이라 역극 옆에 (원래 TRPG 그룹)
     ],
   },
   {

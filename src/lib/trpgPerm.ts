@@ -11,8 +11,8 @@ import type { MemberLite } from './members';
 /** 기본값 — 커플홈이라 회원도 등록한다 */
 export const TRPG_WRITE_DEF = 'member' as const;
 
-/** 권한 저장 키 — 기본 RP LOG는 /trpg, 여러 개로 만든 것은 /trpg?s=<id> (writeKeyOf) */
-export const trpgWriteKey = (secId?: string) => writeKeyOf('/trpg', secId);
+/** 권한 저장 키 — 기본 RP LOG는 /log, 여러 개로 만든 것은 /log?s=<id> (writeKeyOf). 옛 /trpg 키는 menuStore의 MOVED가 옮긴다 */
+export const trpgWriteKey = (secId?: string) => writeKeyOf('/log', secId);
 
 /** 이 RP LOG에 등록(＋ ADD LOG · 디스코드 가져오기)할 수 있는가 */
 export function canAddTrpg(ms: MenuSettings, secId: string | undefined, viewer: MenuViewer): boolean {

@@ -126,7 +126,7 @@ export const DEFAULT_MENU_SETTINGS: MenuSettings = {
 const KEY = 'ohome.menuset.v1';
 
 /** 주소를 바꾼 메뉴 (v2.0 사용자 요청) — 옛 이름이 그대로였던 것들 */
-const MOVED: Record<string, string> = { '/roadview': '/loadb', '/backup': '/gallery' };
+const MOVED: Record<string, string> = { '/roadview': '/loadb', '/backup': '/gallery', '/trpg': '/log' };   // /trpg → /log (커플홈)
 
 /**
  * 저장된 메뉴의 옛 주소를 새 주소로 (v2.0).
@@ -154,6 +154,9 @@ function moveHrefs(p: Partial<MenuSettings>): Partial<MenuSettings> {
       })),
     } : {}),
     ...(p.removedBoards ? { removedBoards: p.removedBoards.map(mv) } : {}),
+    // 게시판별 글쓰기 권한·멤버는 주소가 키다 (writeKeyOf) — 주소를 옮기면 키도 옮긴다 (커플홈 — /trpg → /log)
+    ...(p.writePerm ? { writePerm: Object.fromEntries(Object.entries(p.writePerm).map(([k, v]) => [mv(k), v])) } : {}),
+    ...(p.writeMembers ? { writeMembers: Object.fromEntries(Object.entries(p.writeMembers).map(([k, v]) => [mv(k), v])) } : {}),
   };
 }
 

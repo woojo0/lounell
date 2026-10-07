@@ -26,7 +26,7 @@ export type SectionKind =
 export const SECTION_META: Record<SectionKind, { label: string; href: string; defName: string }> = {
   gallery:  { label: '갤러리',    href: '/gallery',   defName: '갤러리' },
   roadview: { label: '로드비',    href: '/loadb', defName: '로드비' },
-  trpg:     { label: 'RP LOG',   href: '/trpg',     defName: 'RP LOG' },
+  trpg:     { label: 'RP LOG',   href: '/log',      defName: 'RP LOG' },   // 주소는 /log (커플홈 — 종류 이름·DB 테이블은 trpg 그대로)
   dotori:   { label: '도토리',    href: '/dotori',   defName: '도토리' },
   playlog:  { label: '플레이기록', href: '/playlog', defName: '플레이기록' },
   diary:    { label: '다이어리',  href: '/diary',    defName: '다이어리' },

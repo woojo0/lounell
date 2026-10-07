@@ -86,7 +86,7 @@ function TrpgPageInner() {
   // ADD LOG 모달
   const [addOpen, setAddOpen] = useState(false);
   const [nNo, setNNo] = useState('');          // № 자리 표시 텍스트 — 비우면 자동 № 0XX
-  const [nSlug, setNSlug] = useState('');      // 페이지 주소 별명 — /trpg/{별명} (커플홈 사용자 요청) · 비우면 자동(id)
+  const [nSlug, setNSlug] = useState('');      // 페이지 주소 별명 — /log/{별명} (커플홈 사용자 요청) · 비우면 자동(id)
   const [nTags, setNTags] = useState<string[]>([]);   // 태그 (커플홈)
   const [nVis, setNVis] = useState<'public' | 'member' | 'private'>('public'); // 접근권한
   const [nListHidden, setNListHidden] = useState(false);   // 목록 표시 여부 (v2.0 — 접근권한과 별개)
@@ -493,7 +493,7 @@ function TrpgPageInner() {
           <div style={{ display: 'flex', gap: 8 }}>
             <KInput placeholder="캐치프레이즈 (선택)" value={nCatch} onChange={e => setNCatch(e.target.value)} />
             {/* 페이지 주소 별명 (커플홈 사용자 요청 — 무작위 id 대신 /trpg/별명) — 입력하는 대로 캐릭터와 같은 규칙으로 다듬는다 */}
-            <KInput placeholder="페이지 주소 (선택) — /trpg/여기" value={nSlug} onChange={e => setNSlug(slugify(e.target.value))}
+            <KInput placeholder="페이지 주소 (선택) — /log/여기" value={nSlug} onChange={e => setNSlug(slugify(e.target.value))}
               style={{ maxWidth: 220 }} />
           </div>
           {/* 태그 (커플홈 사용자 요청) — 기존 태그는 입력 중 아래에 자동완성 */}

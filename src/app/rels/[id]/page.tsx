@@ -1372,7 +1372,7 @@ export default function RelDetailPage() {
         )}
         {!au?.hideLog && (
         <div className="panel widget" style={{ margin: 0, ...(au?.hideRp ? { gridColumn: '1/-1' } : null) }}>
-          <h4>로그 <span className="more" onClick={() => router.push(`/trpg?rel=${rel.id}${auId !== 'base' ? `&au=${auId}` : ''}`)}>더보기 ›</span></h4>
+          <h4>로그 <span className="more" onClick={() => router.push(`/log?rel=${rel.id}${auId !== 'base' ? `&au=${auId}` : ''}`)}>더보기 ›</span></h4>
           {relLogs.length > 0 ? relLogs.map(l => (
             <div key={l.id} className="dday-row" style={{ cursor: 'var(--cur-pointer,pointer)' }} onClick={() => router.push(logPath(l))}>
               {/* 번호 없이 제목만 — 연동 리스트에서는 순번이 의미가 없다 (사용자 확정) */}

@@ -2372,13 +2372,13 @@ function MenuPane() {
     }
     const def: MenuPerm | null =
       path === '/tchars' || path === '/playlog' ? 'admin'
-      : path === '/videos' || path === '/threads' || path === '/dotori' || path === '/trpg' ? 'member'   // RP LOG — 등록 권한이 있는 회원은 수정도 (trpgPerm.ts)
+      : path === '/videos' || path === '/threads' || path === '/dotori' || path === '/log' ? 'member'   // RP LOG — 등록 권한이 있는 회원은 수정도 (trpgPerm.ts)
       // 추가 로드비 — 기본 페이지의 공통값(roadUpload)을 따르되 따로 정할 수 있다 (기본 페이지는 아래 /loadb 가지에서)
       : path === '/loadb' && secId !== MAIN_SEC ? (ms.roadUpload === 'admin' ? 'admin' : 'member')
       : null;
     if (def === null) return null;
     const key = writeKeyOf(path, secId);
-    const what = path === '/loadb' ? '업로드' : path === '/tchars' || path === '/playlog' || path === '/dotori' || path === '/trpg' ? '등록' : '글쓰기';
+    const what = path === '/loadb' ? '업로드' : path === '/tchars' || path === '/playlog' || path === '/dotori' || path === '/log' ? '등록' : '글쓰기';
     return { key, perm: ms.writePerm?.[key] ?? def, what };
   };
 

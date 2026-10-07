@@ -93,7 +93,7 @@ const STORAGE_KEY = 'ohome.main.v1';
 /** 편집모드를 지원하는 페이지 (v1.9 — 카드 그리드 드래그 정렬 포함)
  *  /trpg 로그 백업이 빠져 있던 것은 실수 — 드래그 정렬·목록 숨김 확인 모두 이 토글이 있어야 켜진다
  *  (v2.0 사용자 발견 — 목록 숨김 기능을 만들다 보니 편집모드 자체가 이 페이지에서 켜지지 않는 걸 발견) */
-const EDIT_PAGES = ['/', '/gallery', '/dotori', '/tchars', '/playlog', '/trpg'];
+const EDIT_PAGES = ['/', '/gallery', '/dotori', '/tchars', '/playlog', '/log'];
 const EDIT_PAGE_NAMES = '메인 · 갤러리 · 도토리 · TRPG 캐릭터 · 플레이기록 · RP LOG · 자관';
 /** 관리 버튼만 켜고 끄는 편집모드 (커플홈 사용자 요청 — 「자관의 관리자 버튼도 편집모드를 켰을 때만,
  *  깔끔한 화면을 보려고 로그아웃하기 귀찮다」). 배치 스냅샷·종료 확인 없이 그냥 켜고 끈다.

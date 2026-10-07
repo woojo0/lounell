@@ -236,7 +236,7 @@ function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds, faces, face
           {busy ? '올리는 중…' : postedId ? '올렸습니다' : !ready ? '불러오는 중…' : '＋ RP LOG에 올리기'}
         </button>
         {postedId && (
-          <button className="btn btn-ghost" onClick={() => router.push(`/trpg/${postedId}`)}>올린 로그 보기 ›</button>
+          <button className="btn btn-ghost" onClick={() => router.push(`/log/${postedId}`)}>올린 로그 보기 ›</button>
         )}
       </div>
     </div>

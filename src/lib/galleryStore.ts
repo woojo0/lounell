@@ -85,7 +85,7 @@ export interface TrpgLog {
   /** 수정할 수 있는 회원 — 이 게시판에 등록 권한이 있는 회원 전원을 저장할 때마다 적는다 (trpgPerm.ts trpgEditorIds).
    *  서버 규칙은 문서에 적힌 이 목록(editorIds)만 보므로, 화면의 판정(canEditTrpg)도 같은 목록을 본다 */
   editorIds?: string[];
-  /** 페이지 주소 별명 (커플홈 사용자 요청 — "로그 주소도 입력할 수 있게": 무작위 id 대신 /trpg/{별명}) — 캐릭터·자관과 같은 규칙.
+  /** 페이지 주소 별명 (커플홈 사용자 요청 — "로그 주소도 입력할 수 있게": 무작위 id 대신 /log/{별명}) — 캐릭터·자관과 같은 규칙.
    *  참조(플레이기록 연결·자관 목록 등)는 언제나 id로 저장되므로 별명을 바꿔도 끊어지지 않고, id 주소도 계속 열린다 */
   slug?: string;
   /** 태그 (커플홈 사용자 요청 — 자관이 하나뿐이라 자관 필터 대신 태그로 거른다) — 목록 옆 태그 목록·검색에 쓰인다 */
@@ -133,7 +133,7 @@ export const bodyVisibility = (l: { visibility: Visibility; password?: string })
 export const TRPG_BODY_SEED: TrpgLogBody[] = [];
 
 /** 로그 페이지 주소 — 별명을 정했으면 그것, 아니면 id (캐릭터의 charPath와 같은 규칙) */
-export const logPath = (l: { id: string; slug?: string }) => `/trpg/${l.slug?.trim() || l.id}`;
+export const logPath = (l: { id: string; slug?: string }) => `/log/${l.slug?.trim() || l.id}`;
 
 /** № 자리 표시 — 직접 입력한 텍스트가 있으면 그대로, 없으면 자동 № 0XX */
 export const logNo = (l: TrpgLog) => l.noText || `№ ${String(l.no).padStart(3, '0')}`;

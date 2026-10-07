@@ -21,6 +21,7 @@ import { useMainStore } from '@/lib/mainStore';
 import { mergeOrder } from '@/lib/cardSort';
 import { DragList } from '@/components/ui/DragList';
 import { OrderMenu, orderNoOf, moveToOrder } from '@/components/ui/OrderMenu';
+import { DiscordImportModal } from '@/components/rp/DiscordImport';
 
 function TrpgPageInner() {
   const router = useRouter();
@@ -39,6 +40,7 @@ function TrpgPageInner() {
   const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
   const { editOn } = useMainStore();          // 편집모드 — 상단바 토글 (다른 목록과 공통)
   const [filter, setFilter] = useState<string>('all');
+  const [dcOpen, setDcOpen] = useState(false);   // 디스코드 가져오기 모달 (커플홈)
   const [skin, setSkin] = useState<'ticket' | 'basic'>('ticket');
   const [q, setQ] = useState('');
   // 모바일은 티켓 스킨 대신 항상 기본형 리스트 — 좁은 폭에서 티켓이 뭉개지지 않게 (v1.9 사용자 확정)
@@ -282,6 +284,8 @@ function TrpgPageInner() {
         <EditableDesc k="trpg-desc" def="티켓형 스킨 · 시나리오 타이틀 폰트 개별 설정 · 우측 자관 뱃지로 필터" />
         <div className="head-actions">
           <SearchBar onSearch={setQ} />
+          {/* 디스코드 복사본 가져오기 (커플홈 사용자 요청) — 붙여 넣기/txt → 발화자 매칭 → 역극 모양 로그 */}
+          {isAdmin && <button className="btn btn-ghost" style={{ whiteSpace: 'nowrap' }} onClick={() => setDcOpen(true)}>디스코드 가져오기</button>}
           {isAdmin && <button className="btn btn-dark" style={{ whiteSpace: 'nowrap' }} onClick={() => setAddOpen(true)}>＋ ADD LOG</button>}
         </div>
       </div>
@@ -378,6 +382,7 @@ function TrpgPageInner() {
         </div>
       </div>
 
+      {dcOpen && <DiscordImportModal onClose={() => setDcOpen(false)} initialSecId={sec.id} />}
       {/* ＋ ADD LOG (4.3 — 본문 입력 3방식) */}
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="로그 등록"
         desc="본문: 파일 업로드(.txt/.html — 내용 자동 판별) 또는 붙여넣기/직접 작성"

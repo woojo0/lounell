@@ -19,14 +19,14 @@ const isHex = (c?: string) => !!c && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(c);
 
 /** 얼굴 사진 정보 — 캐릭터 id → 파일 참조와 자관에서 잡아 둔 1:1 위치 */
 export type FaceInfo = Record<string, { ref?: string; crop?: CropValue }>;
-type Faces = Record<string, { url: string; style: string }>;
+export type Faces = Record<string, { url: string; style: string }>;
 
 /** React 스타일 객체 → 인라인 CSS 문자열 (로그 HTML은 문자열이라) */
 const cssOf = (s: React.CSSProperties) =>
   Object.entries(s).map(([k, v]) => `${k.replace(/[A-Z]/g, ch => '-' + ch.toLowerCase())}:${v}`).join(';');
 
 /** 말한 캐릭터들의 얼굴 주소·위치를 모은다 — 주소는 홈 저장소(서버 모드) 그대로, 위치는 그림 비율을 재서 역극 화면과 같은 식으로 */
-async function resolveFaces(speakers: Character[], info: FaceInfo): Promise<Faces> {
+export async function resolveFaces(speakers: Character[], info: FaceInfo): Promise<Faces> {
   const out: Faces = {};
   await Promise.all(speakers.map(async c => {
     const fi = info[c.id];

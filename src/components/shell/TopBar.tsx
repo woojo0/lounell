@@ -23,6 +23,7 @@ import {
   readNotifs, markRead, markAllRead, clearReadNotifs, notifSettings, setNotifSetting, syncNotifs, selfTestNotif,
 } from '@/lib/notifStore';
 import { subscribeTable } from '@/lib/db';
+import { isMsgSoundOn, setMsgSoundOn, MSG_SOUND_EVT } from '@/lib/msgSound';
 
 const BellIcon = () => (
   <svg viewBox="0 0 24 24">
@@ -95,6 +96,14 @@ export function TopBar() {
   };
   const mySet = user ? notifSettings(user.id) : null;
   void notifVer;
+  // 알림음 켜고 끄기 (커플홈 사용자 요청 — "알림 아이콘 눌러서 나오는 곳에서 알림 켜고 끄기") — 브라우저마다, 역극 페이지의 종 버튼과 같은 값
+  const [soundOn, setSoundOn] = useState(true);
+  useEffect(() => {
+    const f = () => setSoundOn(isMsgSoundOn());
+    f();
+    window.addEventListener(MSG_SOUND_EVT, f);
+    return () => window.removeEventListener(MSG_SOUND_EVT, f);
+  }, []);
 
   // 편집모드 중에는 이동 전에 종료 확인 (v1.8)
   // 지금 보고 있는 메뉴를 다시 누르면 그 페이지를 새로 불러옴 — 다시 접속하는 느낌 (v1.9 사용자 요청)
@@ -287,6 +296,11 @@ export function TopBar() {
             ))}
             {mySet && (
               <div className="nset">
+                {/* 알림음 — 이 브라우저에서만 (커플홈). 역극 발화·그 밖의 알림 모두 이 하나로 */}
+                <label className="row">
+                  <span>알림음 (이 브라우저)</span>
+                  <KToggle checked={soundOn} onChange={v => { setMsgSoundOn(v); setSoundOn(v); }} />
+                </label>
                 {(Object.keys(NOTIF_TYPE_LABEL) as NotifType[])
                   .filter(k => k !== 'guest') // 방명록 알림 — 커플홈에서 방명록을 없애 항목도 숨긴다
                   .map(k => (

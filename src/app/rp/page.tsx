@@ -17,7 +17,7 @@ import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useToast } from '@/components/ui/Toast';
 import { RpLogModal } from '@/components/rp/RpLogModal';
 import { rpLogHtml, openLogWindow } from '@/lib/rpLog';
-import { isMsgSoundOn, setMsgSoundOn } from '@/lib/msgSound';
+import { isMsgSoundOn, setMsgSoundOn, MSG_SOUND_EVT } from '@/lib/msgSound';
 import { Lightbox } from '@/components/ui/Lightbox';
 import { putBlob, BlobImg } from '@/lib/blobStore';
 
@@ -394,7 +394,12 @@ export default function RpPage() {
   const [logOpen, setLogOpen] = useState(false);
   // 알림음 켬/끔 (커플홈) — 브라우저마다. 처음 그릴 때는 서버와 같은 값(켬)으로 두고 마운트 뒤 읽는다
   const [soundOn, setSoundOn] = useState(true);
-  useEffect(() => { setSoundOn(isMsgSoundOn()); }, []);
+  useEffect(() => {
+    const f = () => setSoundOn(isMsgSoundOn());   // 종 메뉴(상단 바)에서 바꿔도 같이 바뀐다
+    f();
+    window.addEventListener(MSG_SOUND_EVT, f);
+    return () => window.removeEventListener(MSG_SOUND_EVT, f);
+  }, []);
   useEffect(() => { setLogOpen(false); }, [sel?.id]);
 
   if (!loaded) return <section className="page" />;

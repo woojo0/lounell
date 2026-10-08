@@ -101,10 +101,20 @@ export async function createSupabaseBackend(
     async updateProfile(patch) {
       const { data } = await sb.auth.getUser();
       if (!data.user) return { ok: false, error: '로그인이 필요합니다.' };
+      // 비밀번호 — 현재 비밀번호로 한 번 더 로그인해 확인한 뒤 바꾼다 (여태 이 항목이 빠져 있어 실제로는 안 바뀌었다 — 커플홈 사용자 제보)
+      if (patch.newPassword) {
+        if (!data.user.email) return { ok: false, error: '이 계정은 이메일/비밀번호 로그인이 아니라 비밀번호를 바꿀 수 없습니다.' };
+        if (!patch.currentPassword) return { ok: false, error: '현재 비밀번호를 입력해 주세요.' };
+        const chk = await sb.auth.signInWithPassword({ email: data.user.email, password: patch.currentPassword });
+        if (chk.error) return { ok: false, error: '현재 비밀번호가 올바르지 않습니다.' };
+        const up = await sb.auth.updateUser({ password: patch.newPassword });
+        if (up.error) return { ok: false, error: up.error.message };
+      }
       const row: Record<string, unknown> = { id: data.user.id };
       if (patch.nickname !== undefined) row.nickname = patch.nickname;
       if (patch.avatarUrl !== undefined) row.avatar_url = patch.avatarUrl;
       if (patch.avatarColor !== undefined) row.avatar_color = patch.avatarColor;
+      if (Object.keys(row).length === 1) return { ok: true };   // 비밀번호만 바꾼 경우
       const { error } = await sb.from('profiles').upsert(row, { onConflict: 'id' });
       return error ? { ok: false, error: error.message } : { ok: true };
     },

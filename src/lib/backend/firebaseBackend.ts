@@ -225,12 +225,30 @@ export async function createFirebaseBackend(cfg: FirebaseCfg): Promise<Backend> 
     async updateProfile(patch) {
       const u = auth.currentUser;
       if (!u) return { ok: false, error: '로그인이 필요합니다.' };
+      // 비밀번호 — 현재 비밀번호로 다시 인증한 뒤 바꾼다 (Firebase는 민감한 작업에 최근 로그인을 요구한다 — 재인증이 그 조건도 채운다).
+      // 여태 이 항목이 빠져 있어 마이페이지가 「변경되었습니다」만 띄우고 실제로는 안 바뀌었다 (커플홈 사용자 제보)
+      if (patch.newPassword) {
+        if (!u.email) return { ok: false, error: '이 계정은 이메일/비밀번호 로그인이 아니라 비밀번호를 바꿀 수 없습니다.' };
+        if (!patch.currentPassword) return { ok: false, error: '현재 비밀번호를 입력해 주세요.' };
+        try {
+          const cred = authMod.EmailAuthProvider.credential(u.email, patch.currentPassword);
+          await authMod.reauthenticateWithCredential(u, cred);
+          await authMod.updatePassword(u, patch.newPassword);
+        } catch (e) {
+          const code = (e as { code?: string })?.code ?? '';
+          if (code.includes('wrong-password') || code.includes('invalid-credential') || code.includes('invalid-login-credentials')) {
+            return { ok: false, error: '현재 비밀번호가 올바르지 않습니다.' };
+          }
+          if (code.includes('too-many-requests')) return { ok: false, error: '시도가 너무 많습니다 — 잠시 뒤 다시 해 주세요.' };
+          return { ok: false, error: humanError(e) };
+        }
+      }
       try {
         const row: Record<string, unknown> = {};
         if (patch.nickname !== undefined) row.nickname = patch.nickname;
         if (patch.avatarUrl !== undefined) row.avatarUrl = patch.avatarUrl ?? null;
         if (patch.avatarColor !== undefined) row.avatarColor = patch.avatarColor ?? null;
-        await setDoc(doc(db, 'profiles', u.uid), row, { merge: true });
+        if (Object.keys(row).length) await setDoc(doc(db, 'profiles', u.uid), row, { merge: true });
         if (patch.nickname) await authMod.updateProfile(u, { displayName: patch.nickname });
         return { ok: true };
       } catch (e) { return { ok: false, error: humanError(e) }; }

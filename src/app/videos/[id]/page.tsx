@@ -11,6 +11,7 @@ import { ConfirmModal } from '@/components/ui/Modal';
 import { useBlobUrl } from '@/lib/blobStore';
 import { sanitizeHtml } from '@/lib/sanitize';
 import { PageTitle } from '@/components/ui/PageText';
+import { useBoardSettings, boardBadgeStyle, videoCatsOf } from '@/lib/boardStore';
 
 /** 플레이어 — 올린 파일·mp4/mov 주소는 <video>, 유튜브·비메오 링크는 끼워 넣기(iframe). 16:9 검은 틀 */
 function VideoViewer({ src, poster }: { src: string; poster?: string }) {
@@ -39,6 +40,7 @@ export default function VideoDetailPage() {
   const p = posts.find(x => x.id === id);
   // 비공개 메뉴(섹션)는 주소로 들어와도 열리지 않게
   const blocked = useHrefBlock(p && sectionHref('videos', p.secId ?? MAIN_SEC));
+  const { st: boardSet } = useBoardSettings();   // 말머리 뱃지 색 (커플홈)
   const tt = useSectionTitle('videos', p?.secId, 'VIDEOS');
   const html = useMemo(() => (p && loaded ? sanitizeHtml(p.desc) : ''), [p, loaded]);
 
@@ -73,6 +75,8 @@ export default function VideoDetailPage() {
             marginLeft: 'auto', fontSize: 'calc(11.5px*var(--fs,1))', fontWeight: 400, letterSpacing: 0,
             color: 'var(--faint)', whiteSpace: 'nowrap', flexShrink: 0,
           }}>
+            {/* 말머리 뱃지 — 이 비디오 게시판의 말머리 색으로 (커플홈) */}
+            {p.category && <span style={{ ...boardBadgeStyle(videoCatsOf(boardSet, p.secId ?? MAIN_SEC).find(c => c.label === p.category)), marginRight: 8 }}>{p.category}</span>}
             {p.author} · {fmtDate(p.date)}
             {(p.tags ?? []).map(t => <i key={t} className="tag-in">#{t}</i>)}
           </span>

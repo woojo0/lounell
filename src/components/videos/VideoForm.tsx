@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { useLocalList, newId } from '@/lib/postStore';
 import { useSectionParam, secStamp, MAIN_SEC, useSectionTitle } from '@/lib/sectionStore';
 import { useMenuSettings, canWriteAt, writeKeyOf } from '@/lib/menuStore';
+import { useBoardSettings, videoCatsOf } from '@/lib/boardStore';
 import { VideoPost, VIDEO_KEY, VIDEO_SEED, videoEmbed, isVideoLink } from '@/lib/videoStore';
 import { isFileUrl } from '@/lib/transfer';
 import { isServerMode } from '@/lib/backend';
@@ -76,6 +77,10 @@ export function VideoForm({ initial }: { initial: VideoPost | null }) {
   const [tagsText, setTagsText] = useState((initial?.tags ?? []).join(', '));
   const parseTags = (v: string) => [...new Set(v.split(',').map(t => t.trim().replace(/^#/, '')).filter(Boolean))];
   const [visibility, setVisibility] = useState<Visibility>(initial?.visibility ?? 'public');
+  // 말머리 (커플홈 사용자 요청 — 갤러리처럼) — 이 비디오 게시판(섹션)의 말머리 중에서, 이름(label)으로 저장
+  const { st: boardSet } = useBoardSettings();
+  const videoCats = videoCatsOf(boardSet, initial ? (initial.secId ?? MAIN_SEC) : sec.id);
+  const [category, setCategory] = useState(initial?.category ?? '');
 
   if (!user) {
     return (
@@ -138,7 +143,7 @@ export function VideoForm({ initial }: { initial: VideoPost | null }) {
     const tags = parseTags(tagsText);
     if (isNew) {
       const p: VideoPost = {
-        id: newId(), title: title.trim(), video, poster: posterId, desc, tags,
+        id: newId(), title: title.trim(), video, poster: posterId, desc, tags, category: category || undefined,
         date: new Date().toISOString(), author: user.nickname, authorId: user.id, visibility,
         ...secStamp(sec.id),
       };
@@ -147,7 +152,7 @@ export function VideoForm({ initial }: { initial: VideoPost | null }) {
       router.push(`/videos/${p.id}`);
     } else {
       setPosts(posts.map(x => (x.id === initial.id
-        ? { ...x, title: title.trim(), video: video!, poster: posterId, desc, tags, visibility }
+        ? { ...x, title: title.trim(), video: video!, poster: posterId, desc, tags, category: category || undefined, visibility }
         : x)));
       toast('저장되었습니다');
       router.push(`/videos/${initial.id}`);
@@ -245,6 +250,18 @@ export function VideoForm({ initial }: { initial: VideoPost | null }) {
               <label className="k-label" style={{ width: 70 }}>태그</label>
               <KInput value={tagsText} onChange={e => setTagsText(e.target.value)} placeholder="쉼표로 구분" style={{ flex: 1 }} />
             </div>
+            {/* 말머리 (커플홈) — 환경설정 「게시판」의 비디오 말머리. 하나도 없으면 칸을 두지 않는다 */}
+            {(videoCats.length > 0 || category) && (
+              <div className="form-row">
+                <label className="k-label" style={{ width: 70 }}>말머리</label>
+                <KSelect minWidth={120} value={category} onChange={setCategory}
+                  options={[
+                    { value: '', label: '말머리 없음' },
+                    ...videoCats.map(c => ({ value: c.label, label: c.label })),
+                    ...(category && !videoCats.some(c => c.label === category) ? [{ value: category, label: `${category} (목록에 없음)` }] : []),
+                  ]} />
+              </div>
+            )}
             <div className="form-row">
               <label className="k-label" style={{ width: 70 }}>공개범위</label>
               <KSelect minWidth={120} value={visibility} onChange={v => setVisibility(v as Visibility)}

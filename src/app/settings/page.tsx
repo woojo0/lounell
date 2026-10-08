@@ -16,7 +16,7 @@ import { DiaryPost, DIARY_SEED } from '@/lib/diaryStore';
 import { newId, todayYmd } from '@/lib/postStore';
 import { useCommSettings, badgeStyle, CommBadge, CommSettings } from '@/lib/commStore';
 import {
-  useBoardSettings, boardBadgeStyle, BoardBadge, galleryCatsOf,
+  useBoardSettings, boardBadgeStyle, BoardBadge, galleryCatsOf, videoCatsOf,
   useBoards, Board, BoardSkin, BoardPerm, DEFAULT_BOARD_CATS, MAIN_BOARD_ID, boardHref,
 } from '@/lib/boardStore';
 import { useThreadSettings, ThreadWork, THREAD_SEED, ThreadCat, threadBadgeStyle, threadCats, threadCatsPatch } from '@/lib/threadStore';
@@ -655,6 +655,7 @@ function BoardPane() {
   const {
     st, patchSystem, patchGallery,
     patchGalleryCat, addGalleryCat, removeGalleryCat, setGalleryCats,
+    patchVideoCat, addVideoCat, removeVideoCat, setVideoCats,
   } = useBoardSettings();
   const { boards, setBoards, patchBoard } = useBoards();
   const [catBoard, setCatBoard] = useState(MAIN_BOARD_ID);   // 말머리 편집 대상 게시판
@@ -665,6 +666,11 @@ function BoardPane() {
   const [galSecSel, setGalSec] = useState(MAIN_SEC);
   const galSec = galSecs.some(s2 => s2.id === galSecSel) ? galSecSel : MAIN_SEC;
   const galCats = galleryCatsOf(st, galSec);
+  /* 비디오 말머리 (커플홈 사용자 요청 — 갤러리처럼) — 비디오 게시판마다 따로 */
+  const vidSecs = secList('videos');
+  const [vidSecSel, setVidSec] = useState(MAIN_SEC);
+  const vidSec = vidSecs.some(s2 => s2.id === vidSecSel) ? vidSecSel : MAIN_SEC;
+  const vidCats = videoCatsOf(st, vidSec);
   const del = useConfirmDelete();
 
   const sel = boards.find(b => b.id === catBoard) ?? boards[0];
@@ -827,6 +833,41 @@ function BoardPane() {
         )} />
       <button className="btn btn-ghost" style={{ marginTop: 8, padding: '7px 14px', fontSize: 11 }}
         onClick={() => addGalleryCat(galSec)}>＋ 말머리 추가</button>
+
+      {/* 비디오 말머리 (커플홈 사용자 요청 — "비디오도 갤러리처럼 카테고리 만들어주고 카테고리별로 탭") — 갤러리 말머리와 같은 방식 */}
+      <h3 style={{ marginTop: 20 }}>비디오 말머리</h3>
+      <div className="d">
+        Videos 글쓰기에서 고르는 말머리 — 목록 왼쪽에 ALL / 말머리… 탭으로 뜬다 · ⠿ 드래그로 순서 · 추가·수정·삭제 자유
+        {vidSecs.length > 1 && <><br />비디오 게시판마다 따로 정합니다 — <b>손대기 전까지는 기본 게시판의 말머리를 그대로 씁니다</b></>}
+      </div>
+      {vidSecs.length > 1 && (
+        <div className="mini-seg" style={{ flexWrap: 'wrap', marginBottom: 10 }}>
+          {vidSecs.map(s2 => (
+            <button key={s2.id} className={vidSec === s2.id ? 'on' : ''} onClick={() => setVidSec(s2.id)}>{s2.name}</button>
+          ))}
+        </div>
+      )}
+      <DragList items={vidCats} keyOf={c => c.id} onReorder={next => setVideoCats(vidSec, next)}
+        render={c => (
+          <div className="set-row" style={{ width: '100%' }}>
+            <div className="l" style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
+              <span className="drag-h">⠿</span>
+              <span style={boardBadgeStyle(c)}>{c.label || '말머리'}</span>
+            </div>
+            <div className="cp-group" style={{ justifyContent: 'flex-end' }}>
+              <KInput value={c.label} onChange={e => patchVideoCat(vidSec, c.id, { label: e.target.value })}
+                style={{ width: 100, textAlign: 'right' }} />
+              {colorCells(c, p => patchVideoCat(vidSec, c.id, p))}
+              <span className="fx" data-tip="말머리 삭제"
+                onClick={() => del.ask(`말머리 「${c.label}」를 삭제하시겠습니까?`,
+                  () => removeVideoCat(vidSec, c.id),
+                  '이미 이 말머리로 등록된 영상은 그대로 남습니다.')}>✕</span>
+            </div>
+          </div>
+        )} />
+      {vidCats.length === 0 && <div className="d" style={{ marginTop: 6 }}>아직 말머리가 없습니다 — 추가하면 Videos 목록 왼쪽에 탭이 생깁니다</div>}
+      <button className="btn btn-ghost" style={{ marginTop: 8, padding: '7px 14px', fontSize: 11 }}
+        onClick={() => addVideoCat(vidSec)}>＋ 말머리 추가</button>
 
       <hr style={{ margin: '24px 0', border: 'none', borderTop: '1.5px solid var(--line)' }} />
       {/* 갤러리·다이어리 등도 여러 개로 (v2.0 사용자 요청) — 목록이 몇 개인지는 여기 한곳에서 */}

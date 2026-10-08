@@ -12,6 +12,8 @@ export interface VideoPost {
   /** 썸네일(포스터) 한 장 — 파일 id 또는 주소 (선택). 없으면 어두운 칸에 ▶ */
   poster?: string;
   desc: string;              // HTML (에디터) — 렌더 시 sanitize
+  /** 말머리 (커플홈 사용자 요청 — 갤러리처럼) — 환경설정 「게시판」의 비디오 말머리 이름(label). 없으면 말머리 없음 */
+  category?: string;
   tags?: string[];
   date: string;              // ISO — 올린 시각
   author: string;

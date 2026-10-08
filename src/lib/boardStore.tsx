@@ -36,6 +36,10 @@ export interface BoardSettings {
   /** 갤러리마다 따로 쓰는 말머리 (v2.0 사용자 요청) — 정한 적 없으면 기본 갤러리 것을 그대로.
    *  새로 만들자마자 말머리가 비면 글부터 못 쓴다(감상타래·스케줄러와 같은 규칙). */
   secGalleryCats?: Record<string, BoardBadge[]>;
+  /** 비디오 말머리 (커플홈 사용자 요청 — "비디오도 갤러리처럼 카테고리 만들어주고 왼쪽에 탭"). 비우면 탭은 ALL 하나뿐 */
+  videoCats?: BoardBadge[];
+  /** 비디오 게시판마다 따로 쓰는 말머리 — 정한 적 없으면 기본 비디오 것을 그대로 */
+  secVideoCats?: Record<string, BoardBadge[]>;
 }
 const DEFAULTS: BoardSettings = {
   system: DEFAULT_BOARD_SYSTEM, cats: DEFAULT_BOARD_CATS,
@@ -50,6 +54,12 @@ export const galleryCatsOf = (s: BoardSettings, secId: string): BoardBadge[] =>
 /** 그 갤러리의 말머리를 담은 patch — 기본 갤러리면 예전 자리에 그대로 저장한다 */
 const galleryCatsPatch = (s: BoardSettings, secId: string, cats: BoardBadge[]): Partial<BoardSettings> =>
   (secId === MAIN_SEC ? { galleryCats: cats } : { secGalleryCats: { ...s.secGalleryCats, [secId]: cats } });
+
+/** 그 비디오 게시판에서 쓸 말머리 (커플홈) — 따로 정한 적이 없으면 기본 비디오 것, 그것도 없으면 빈 목록 */
+export const videoCatsOf = (s: BoardSettings, secId: string): BoardBadge[] =>
+  (secId === MAIN_SEC ? (s.videoCats ?? []) : s.secVideoCats?.[secId] ?? s.videoCats ?? []);
+const videoCatsPatch = (s: BoardSettings, secId: string, cats: BoardBadge[]): Partial<BoardSettings> =>
+  (secId === MAIN_SEC ? { videoCats: cats } : { secVideoCats: { ...s.secVideoCats, [secId]: cats } });
 
 export function useBoardSettings() {
   const [st, setSt] = useState<BoardSettings>(DEFAULTS);
@@ -105,9 +115,21 @@ export function useBoardSettings() {
     mutGalleryCats(secId, cs => cs.filter(b => b.id !== id)), [mutGalleryCats]);
   const setGalleryCats = useCallback((secId: string, cats: BoardBadge[]) =>
     mutGalleryCats(secId, () => cats), [mutGalleryCats]);
+  /* 비디오 말머리 — 갤러리 말머리와 같은 방식, 비디오 게시판마다 따로 (커플홈 사용자 요청) */
+  const mutVideoCats = useCallback((secId: string, fn: (cats: BoardBadge[]) => BoardBadge[]) =>
+    apply(s => ({ ...s, ...videoCatsPatch(s, secId, fn(videoCatsOf(s, secId))) })), [apply]);
+  const patchVideoCat = useCallback((secId: string, id: string, p: Partial<BoardBadge>) =>
+    mutVideoCats(secId, cs => cs.map(b => (b.id === id ? { ...b, ...p } : b))), [mutVideoCats]);
+  const addVideoCat = useCallback((secId: string) =>
+    mutVideoCats(secId, cs => [...cs, { id: newId(), label: '새 말머리', bg: '#eef0f2', border: '#d7dae0', fg: '#5d636d' }]), [mutVideoCats]);
+  const removeVideoCat = useCallback((secId: string, id: string) =>
+    mutVideoCats(secId, cs => cs.filter(b => b.id !== id)), [mutVideoCats]);
+  const setVideoCats = useCallback((secId: string, cats: BoardBadge[]) =>
+    mutVideoCats(secId, () => cats), [mutVideoCats]);
   return {
     st, loaded, patchSystem, patchCat, addCat, removeCat, setCats, patchGallery,
     patchGalleryCat, addGalleryCat, removeGalleryCat, setGalleryCats,
+    patchVideoCat, addVideoCat, removeVideoCat, setVideoCats,
   };
 }
 

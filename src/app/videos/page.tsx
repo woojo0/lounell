@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useSectionParam, filterSection, secQuery } from '@/lib/sectionStore';
 import { useMenuSettings, canWriteAt, writeKeyOf } from '@/lib/menuStore';
+import { useBoardSettings, videoCatsOf } from '@/lib/boardStore';
 import { useLocalList, fmtDate } from '@/lib/postStore';
 import { VideoPost, VIDEO_KEY, VIDEO_SEED } from '@/lib/videoStore';
 import { SearchBar, Pager } from '@/components/ui/Kit';
@@ -20,19 +21,25 @@ function VideosPageInner() {
   // 여러 개로 만든 섹션 — 주소의 ?s= 가 가리키는 것만
   const sec = useSectionParam('videos');
   const [menuSet] = useMenuSettings();
+  /* 말머리 탭 (커플홈 사용자 요청 — 갤러리처럼) — 왼쪽에 ALL / 환경설정 「게시판」의 비디오 말머리 */
+  const { st: boardSet } = useBoardSettings();
+  const videoCats = videoCatsOf(boardSet, sec.id);
+  const [cat, setCat] = useState('');   // '' = ALL
   const posts = filterSection(postsAll, sec.id);
   const [q, setQ] = useState('');
   const query = q.trim().toLowerCase();
   // 내가 쓴 나만보기 글은 나에게도 보인다
   const visible = posts
     .filter(p => isAdmin || p.visibility === 'public' || (p.visibility === 'member' && !!user) || (!!user && p.authorId === user.id))
-    .filter(p => !query || p.title.toLowerCase().includes(query) || (p.tags ?? []).some(t => t.toLowerCase().includes(query)))
+    .filter(p => !cat || p.category === cat)   // 말머리 탭 (커플홈)
+    .filter(p => !query || p.title.toLowerCase().includes(query) || (p.category ?? '').toLowerCase().includes(query)
+      || (p.tags ?? []).some(t => t.toLowerCase().includes(query)))
     .sort((a, b) => b.date.localeCompare(a.date));
   const [page, setPage] = useState(1);
   const pages = Math.max(1, Math.ceil(visible.length / PER));
   const cur = Math.min(page, pages);
   const paged = visible.slice((cur - 1) * PER, cur * PER);
-  useEffect(() => { setPage(1); }, [q, sec.id]);
+  useEffect(() => { setPage(1); }, [q, sec.id, cat]);
 
   return (
     <section className="page">
@@ -41,7 +48,13 @@ function VideosPageInner() {
         <EditableDesc k="videos-desc" def="영상 하나씩 — 파일로 올리거나 링크로" />
       </div>
       <div className="toolrow">
-        <div />
+        {/* 왼쪽: 말머리 탭 — ALL / 환경설정에서 정한 비디오 말머리 (커플홈 사용자 요청 — 갤러리와 같은 형태) */}
+        <div className="seg">
+          <button className={cat === '' ? 'on' : ''} onClick={() => setCat('')}>ALL</button>
+          {videoCats.map(c => (
+            <button key={c.label} className={cat === c.label ? 'on' : ''} onClick={() => setCat(c.label)}>{c.label}</button>
+          ))}
+        </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <SearchBar onSearch={setQ} />
           {/* 글쓰기 권한 (커플홈) — 환경설정 「권한」에서 게시판마다 · 멤버 선택으로 좁힐 수 있다 */}
@@ -74,7 +87,7 @@ function VideosPageInner() {
       )}
       {visible.length === 0 && (
         <div className="panel" style={{ textAlign: 'center', padding: 44, fontSize: 13, color: 'var(--faint)' }}>
-          {q ? '검색 결과가 없습니다' : '아직 올린 영상이 없습니다'}
+          {q || cat ? '검색 결과가 없습니다' : '아직 올린 영상이 없습니다'}
         </div>
       )}
       {pages > 1 && (

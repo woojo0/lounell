@@ -52,7 +52,7 @@ function RelEditInner() {
             // 폰트는 AU 편집이면 그 AU에만 (v2.0 사용자 제보 — 여태 원본에 저장돼 전체가 같이 바뀌었다)
             ...(auObj ? {} : { fontId: v.fontId, bodyFontId: v.bodyFontId, titleSize: v.titleSize, titleBold: v.titleBold, cpText: v.cpText }),
             // 헤더는 AU 편집이면 그 AU에만 저장 — base 헤더는 유지 (v1.9 AU별 헤더 분리)
-            ...(auObj ? {} : { headerImgId: v.headerImgId, headerCrop: v.headerCrop, slug: v.slug }),
+            ...(auObj ? {} : { headerImgId: v.headerImgId, headerCrop: v.headerCrop, headerBlur: v.headerBlur, slug: v.slug }),
             // 페이지 테마 — AU 편집이면 그 AU에만 (base 테마는 유지, v1.9)
             ...(auObj ? {} : { themeMode: v.themeMode, themeColor: v.themeColor, themeTone: v.themeTone, illuBg: v.illuBg, illuOn: v.illuOn, nameColor: v.nameColor, cpColor: v.cpColor, cpTagBg: v.cpTagBg, cpTagFg: v.cpTagFg,
                 nameShadowColor: v.nameShadowColor, nameShadow: v.nameShadow,
@@ -116,6 +116,7 @@ function RelEditInner() {
                   // AU별 헤더 (v1.9) — 제거하면 "없음 명시"(null): base 헤더로 되돌아가지 않음
                   headerImgId: v.headerRemoved ? undefined : v.headerImgId,
                   headerCrop: v.headerRemoved ? undefined : v.headerCrop,
+                  headerBlur: v.headerRemoved ? undefined : v.headerBlur,   // 흐림 정도 (커플홈)
                   // AU별 페이지 테마 — 기존 따라가기면 미지정 (v1.9)
                   theme: v.themeFollow ? undefined : { mode: v.themeMode, color: v.themeColor, tone: v.themeTone },
                   fulls: v.fulls

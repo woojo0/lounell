@@ -50,7 +50,7 @@ export default function RelNewPage() {
             fontId: v.fontId, bodyFontId: v.bodyFontId, visibility: v.visibility,
             titleSize: v.titleSize, titleBold: v.titleBold, cpText: v.cpText,
             arts: v.arts, thumbId: v.arts[0], thumbCrop: v.thumbCrop,
-            headerImgId: v.headerImgId, headerCrop: v.headerCrop,
+            headerImgId: v.headerImgId, headerCrop: v.headerCrop, headerBlur: v.headerBlur,
             themeMode: v.themeMode, themeColor: v.themeColor, themeTone: v.themeTone,
             illuBg: v.illuBg, illuOn: v.illuOn,
             nameColor: v.nameColor, cpColor: v.cpColor, cpTagBg: v.cpTagBg, cpTagFg: v.cpTagFg,

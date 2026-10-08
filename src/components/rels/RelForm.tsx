@@ -11,6 +11,7 @@ import { newId } from '@/lib/postStore';
 import { useFonts, deVarFamily } from '@/lib/fontStore';
 import { putBlob, getBlob, useBlobUrl } from '@/lib/blobStore';
 import { KInput, KSelect, KCheck, KStep } from '@/components/ui/Kit';
+import { HEADER_BLUR_DEFAULT } from '@/lib/charStore';
 import { CropEditor, CropValue, CropImg } from '@/components/ui/CropEditor';
 import { DragList } from '@/components/ui/DragList';
 import { Lightbox } from '@/components/ui/Lightbox';
@@ -33,6 +34,7 @@ export interface RelFormValue {
   headerImgId?: string;      // 헤더 이미지 (v1.5 — 풀폭 블러 + 페이드아웃)
   headerCrop?: CropValue;    // 헤더 위치 크롭 (원본 무손실)
   headerRemoved?: boolean;   // 헤더 제거 상태 (v1.9 — AU 편집에서 "없음 명시" 저장용)
+  headerBlur?: number;       // 헤더 흐림 px (커플홈 사용자 요청) — 0이면 흐리지 않음
   themeFollow?: boolean;     // AU 편집: true면 기존(base) 페이지 테마 따라가기 (v1.9)
   illuBg?: string;           // 전신/일러 스위치 배경색 (v1.9 — 미지정: 테마)
   illuOn?: string;           // 전신/일러 스위치 선택색 (미지정: 포인트색)
@@ -208,6 +210,8 @@ export function RelForm({ initial, auId, myChars, memberNames, existingIds, onSa
   const initHeaderCrop = auObj ? auObj.headerCrop : initial?.headerCrop;
   const [headerCrop, setHeaderCrop] = useState<CropValue | undefined>(initHeaderCrop);
   const [headerCropOpen, setHeaderCropOpen] = useState(false);
+  // 헤더 흐림 정도 (커플홈 사용자 요청) — 0이면 흐리지 않음. AU 편집이면 그 AU 것, 없으면 기본값
+  const [headerBlur, setHeaderBlur] = useState<number>((auObj ? auObj.headerBlur : initial?.headerBlur) ?? HEADER_BLUR_DEFAULT);
   // 페이지 테마 (v1.9 AU별) — AU 편집: 기존(base) 따라가기 또는 이 AU 전용 테마
   const [themeFollow, setThemeFollow] = useState<boolean>(auObj ? auObj.theme === undefined : false);
   const [themeMode, setThemeMode] = useState<'site' | 'custom'>(
@@ -351,6 +355,7 @@ export function RelForm({ initial, auId, myChars, memberNames, existingIds, onSa
       thumbCrop,
       headerImgId: headerFile ? await putBlob(headerFile) : (headerRemoved ? undefined : initHeaderId),
       headerCrop: headerRemoved ? undefined : headerCrop,
+      headerBlur: headerRemoved ? undefined : headerBlur,
       headerRemoved,
       themeFollow,
       illuBg: illuCustom ? illuBg : undefined,
@@ -631,7 +636,7 @@ export function RelForm({ initial, auId, myChars, memberNames, existingIds, onSa
               }
             })}>
             {headerUrl ? (
-              <div style={{ position: 'absolute', inset: 0, filter: 'blur(2px)' }}>
+              <div style={{ position: 'absolute', inset: 0, filter: `blur(${Math.round(headerBlur / 8)}px)` }}>
                 <CropImg src={headerUrl} crop={headerCrop} />
               </div>
             ) : (!headerRemoved && initHeaderId) ? (
@@ -658,6 +663,15 @@ export function RelForm({ initial, auId, myChars, memberNames, existingIds, onSa
             </>
           )}
         </div>
+        {/* 흐림 (커플홈 사용자 요청 — "헤더 이미지를 흐리지 않게 하는 것과 흐림 정도 조절") — 끄면 원본 그대로 */}
+        {(headerUrl || (!headerRemoved && initHeaderId)) && (
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span className="cp-lb">흐림</span>
+            <KCheck label="흐리게" checked={headerBlur > 0} onChange={(v: boolean) => setHeaderBlur(v ? HEADER_BLUR_DEFAULT : 0)} />
+            {headerBlur > 0 && <KStep value={headerBlur} min={2} max={40} step={2} suffix="px" onChange={setHeaderBlur} />}
+            <small className="hint" style={{ margin: 0 }}>{headerBlur > 0 ? `숫자가 클수록 더 흐려집니다 (기본 ${HEADER_BLUR_DEFAULT})` : '원본 그대로 깔립니다'}</small>
+          </div>
+        )}
         {headerCropOpen && (headerUrl || (!headerRemoved && initHeaderId)) && (
           <HeaderCrop src={headerUrl} refId={!headerUrl ? initHeaderId : undefined} crop={headerCrop}
             onClose={() => setHeaderCropOpen(false)}

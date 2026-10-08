@@ -20,6 +20,7 @@ import { putBlob } from '@/lib/blobStore';
 import { GrantsEditor } from '@/components/chars/GrantsEditor';
 import { TrpgLog, TRPG_SEED, logPath } from '@/lib/galleryStore';
 import { RpRoom, RP_SEED, rpMemberIds } from '@/lib/rpStore';
+import { HEADER_BLUR_DEFAULT } from '@/lib/charStore';
 import { useFonts } from '@/lib/fontStore';
 import { useMainStore } from '@/lib/mainStore';
 import { useMenuSettings, removeFromTree, defaultTree } from '@/lib/menuStore';
@@ -848,10 +849,12 @@ export default function RelDetailPage() {
       {(() => {
         const hdrId = isBaseAu ? rel.headerImgId : (au?.headerImgId ?? undefined);
         const hdrCrop = isBaseAu ? rel.headerCrop : au?.headerCrop;
+        // 흐림 정도 (커플홈 사용자 요청) — 0이면 흐리지 않고 원본 그대로, 어둡게·채도 낮추기는 글자가 읽히게 그대로 둔다
+        const hdrBlur = (isBaseAu ? rel.headerBlur : au?.headerBlur) ?? HEADER_BLUR_DEFAULT;
         if (hdrId) {
           return (
             <div className="rel-backdrop">
-              <div className="img custom">
+              <div className="img custom" style={{ filter: `blur(${hdrBlur}px) brightness(.8) saturate(.9)` }}>
                 <CroppedBlobImg fileRef={hdrId} crop={hdrCrop} ph="" />
               </div>
             </div>

@@ -21,6 +21,8 @@ import { ColorField } from '@/components/ui/ColorField';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useToast } from '@/components/ui/Toast';
 import { CharComments } from '@/components/ui/CharComments';
+import { notifyMembers } from '@/lib/notifStore';
+import { useMembers } from '@/lib/members';
 
 /** 메모에 적힌 이름 — 캐입 메모면 캐릭터(테마색 점 + 이름)를 **그 캐릭터의 이름 폰트**로 (커플홈 사용자 요청 —
  *  캐릭터 글씨로 서명한 것처럼), 아니면 쓴 사람. 캐릭터가 지워졌으면 쓸 당시 이름(author)으로 */
@@ -46,6 +48,7 @@ function MemoInner() {
   const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);   // AU 캐릭터로 남기기 (커플홈) — 자관의 AU 목록
   // 페이지(종류)별 메모판 (커플홈) — 주소의 ?s= 가 가리키는 페이지 것만 보여 준다
   const sec = useSectionParam('memo');
+  const members = useMembers();   // 새 메모 알림 받을 사람들 (커플홈)
   const memos = filterSection(memosAll, sec.id);
   // 저장은 이 페이지 자리만 교체 — 새 메모에는 이 페이지 소속이 찍힌다
   const setMemos = sectionSetter(memosAll, sec.id, setMemosAll);
@@ -210,6 +213,11 @@ function MemoInner() {
         z: maxZ() + 1, date: new Date().toISOString(),
       };
       setMemos([...memos, m]);
+      // 상대방에게 알림 (커플홈 사용자 요청) — 새 메모만, 고치거나 옮긴 것은 아니다
+      notifyMembers({
+        type: 'memo', href: sectionHref('memo', sec.id),
+        title: `${m.author}의 새 메모`, body: m.text.slice(0, 60),
+      }, members);
     }
     setMOpen(false);
   };

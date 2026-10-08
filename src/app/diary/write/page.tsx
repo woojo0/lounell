@@ -12,6 +12,8 @@ import { useSectionParam, secStamp, sectionHref } from '@/lib/sectionStore';
 import { DiaryForm } from '@/components/diary/DiaryForm';
 import { useToast } from '@/components/ui/Toast';
 import { PageTitle, EditableDesc } from '@/components/ui/PageText';
+import { notifyMembers } from '@/lib/notifStore';
+import { useMembers } from '@/lib/members';
 
 function DiaryWriteInner() {
   const router = useRouter();
@@ -22,6 +24,7 @@ function DiaryWriteInner() {
   const [chars, , charsLoaded] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
   const [dset] = useDiarySettings();
   const sec = useSectionParam('diary');
+  const members = useMembers();   // 새 일기 알림 받을 사람들 (커플홈)
   const sp = useSearchParams();
   const wantChar = sp.get('char') ?? undefined;
   const wantCat = sp.get('cat') ?? undefined;   // 보고 있던 구분 탭
@@ -47,6 +50,15 @@ function DiaryWriteInner() {
           // 쓴 사람을 남긴다 — 두 사람이 같이 쓰므로 수정·삭제 권한과 칸 판정에 쓴다
           const p: DiaryPost = { id: newId(), ...v, authorId: user?.id, createdAt: new Date().toISOString(), ...secStamp(sec.id) };
           setPosts([p, ...posts]);
+          // 상대방에게 알림 (커플홈 사용자 요청) — 나만보기 일기는 있다는 것도 알리지 않는다
+          if (p.visibility !== 'private') {
+            const who = chars.find(c => c.id === p.charId)?.name ?? user?.nickname ?? '누군가';
+            notifyMembers({
+              type: 'diary', href: listHref,
+              title: `${who}의 새 일기 「${p.title || p.date}」`,
+              body: p.body.replace(/[#*_>`[\]()!]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60),
+            }, members);
+          }
           toast('일기가 등록되었습니다');
           router.push(listHref);
         }} />

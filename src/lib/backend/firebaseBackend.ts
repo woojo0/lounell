@@ -283,6 +283,17 @@ export async function createFirebaseBackend(cfg: FirebaseCfg): Promise<Backend> 
       return [...seen.values()].sort((a, b) => a.sort - b.sort).map(v => v.item);
     },
 
+    async fetchOne<T extends ListItem>(coll: string, id: string): Promise<T | null> {
+      try {
+        const d = await getDoc(doc(db, coll, id));
+        if (!d.exists()) return null;
+        const raw = d.data() as { data?: Record<string, unknown> };
+        return { ...(raw.data ?? {}), id: d.id } as T;
+      } catch {
+        return null;   // 읽기 규칙에 막힘(권한 없음) 등 — 없는 것으로
+      }
+    },
+
     async syncList<T extends ListItem>(coll: string, prev: T[], next: T[], uid: string | null) {
       const { inserts, updates, moves, deletes } = diffList(prev, next);
       const ops = [...inserts, ...updates];

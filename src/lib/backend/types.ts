@@ -61,6 +61,8 @@ export interface Backend {
 
   /* ---- 목록(콘텐츠) ---- */
   fetchList<T extends ListItem>(coll: string): Promise<T[]>;
+  /** 문서 한 건 (커플홈 — RP LOG 본문처럼 큰 문서가 모인 컬렉션은 목록 통째로 받으면 느리다). 없거나 읽을 권한이 없으면 null */
+  fetchOne<T extends ListItem>(coll: string, id: string): Promise<T | null>;
   syncList<T extends ListItem>(coll: string, prev: T[], next: T[], uid: string | null): Promise<void>;
   /** 이미 저장된 행의 공개범위만 다시 계산해 덮어쓴다 (v2.0) — 메뉴를 비공개로 바꾼 뒤
    *  「글에도 적용」을 누르면 돈다. 내용(data)·순서(sort)는 건드리지 않는다. */

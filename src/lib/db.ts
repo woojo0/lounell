@@ -14,6 +14,12 @@ export async function fetchList<T extends ListItem>(coll: string): Promise<T[]> 
   return be ? be.fetchList<T>(coll) : [];
 }
 
+/** 문서 한 건 — 큰 문서가 모인 컬렉션(RP LOG 본문)에서 목록 통째로 받지 않으려고 (커플홈) */
+export async function fetchOne<T extends ListItem>(coll: string, id: string): Promise<T | null> {
+  const be = backend();
+  return be ? be.fetchOne<T>(coll, id) : null;
+}
+
 export async function syncList<T extends ListItem>(
   coll: string, prev: T[], next: T[], uid: string | null,
 ): Promise<void> {

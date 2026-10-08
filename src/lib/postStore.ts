@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { PostMode } from './sanitize';
 import { isServerMode } from './supabase';
-import { TABLE_OF, fetchList, syncList, subscribeTable } from './db';
+import { TABLE_OF, fetchList, fetchOne, syncList, subscribeTable } from './db';
 import { currentUserId } from './currentUser';
 
 /** 목록 저장 실패 알림 (v2.0) — 조용히 되돌리면 "쓴 게 바로 지워진다"로만 보여 원인을 알 수 없다.
@@ -192,6 +192,110 @@ export function useLocalList<T extends { id?: string }>(key: string, seed: T[]):
   }, [key, server, table]);
 
   return [list, update, loaded];
+}
+
+/**
+ * 문서 한 건만 읽고 쓰기 (커플홈 사용자 제보 — 「디코 로그라 그런지 로그 로딩이 너무 느리다」).
+ *
+ * RP LOG 본문(trpg_log_bodies)은 한 건이 수십~수백 KB라, 상세 하나를 열면서 useLocalList로 **모든 로그의 본문을
+ * 통째로** 받아 오던 것이 느린 원인이었다 (게다가 컬렉션에 변경이 생길 때마다 전체를 다시 받았다).
+ * 이 훅은 그 id 하나만 받고(fetchOne), 바뀌면 그 하나만 다시 받으며, 저장·삭제도 그 문서만 보낸다(syncList에 한 건짜리 목록).
+ * 로컬 모드는 그 key의 목록 안에서 해당 id만 다룬다 — 같은 탭·다른 탭의 useLocalList와는 LIST_EVT/storage로 맞춘다.
+ */
+export function useOneDoc<T extends { id: string }>(key: string, id: string | undefined):
+  [T | undefined, (next: T) => void, () => void, boolean] {
+  const server = isServerMode() && !!TABLE_OF[key];
+  const table = TABLE_OF[key];
+  const [item, setItem] = useState<T | undefined>(undefined);
+  const [loaded, setLoaded] = useState(false);
+  const latest = useRef<T | undefined>(undefined);   // 서버(저장소)에 있다고 아는 상태 — diff 기준
+
+  useEffect(() => {
+    let alive = true;
+    setItem(undefined); latest.current = undefined; setLoaded(false);
+    if (!id) { setLoaded(true); return; }
+    if (server) {
+      const load = () => {
+        fetchOne<T & { id: string }>(table, id)
+          .then(row => { if (!alive) return; setItem(row ?? undefined); latest.current = row ?? undefined; setLoaded(true); })
+          .catch(() => { if (alive) setLoaded(true); });
+      };
+      load();
+      const off = subscribeTable(table, load);   // 남이 고치면 그 한 건만 다시
+      return () => { alive = false; off(); };
+    }
+    const read = () => {
+      try {
+        const list = JSON.parse(localStorage.getItem(key) ?? '[]') as T[];
+        const row = list.find(x => x.id === id);
+        setItem(row); latest.current = row;
+      } catch { /* 무시 */ }
+      setLoaded(true);
+    };
+    read();
+    const onStorage = (e: StorageEvent) => { if (e.key === key) read(); };
+    const onLocal = (e: Event) => { if ((e as CustomEvent<{ key: string }>).detail?.key === key) read(); };
+    window.addEventListener('storage', onStorage);
+    window.addEventListener(LIST_EVT, onLocal);
+    return () => { alive = false; window.removeEventListener('storage', onStorage); window.removeEventListener(LIST_EVT, onLocal); };
+  }, [key, id, server, table]);
+
+  const fail = useCallback((err: unknown) => {
+    console.error('[ohome] 저장 실패', err);
+    try {
+      window.dispatchEvent(new CustomEvent(QUIET_TABLES.has(table) ? LIST_QUIET_ERR_EVT : LIST_ERR_EVT, {
+        detail: { table, message: err instanceof Error ? err.message : String(err) },
+      }));
+    } catch { /* 무시 */ }
+  }, [table]);
+  const save = useCallback((next: T) => {
+    const prev = latest.current;
+    setItem(next); latest.current = next;   // 낙관적 반영
+    if (server) { syncList(table, prev ? [prev] : [], [next], currentUserId()).catch(fail); return; }
+    writeLocalDoc(key, next, false);
+  }, [key, server, table, fail]);
+  const remove = useCallback(() => {
+    const prev = latest.current;
+    setItem(undefined); latest.current = undefined;
+    if (!prev) return;
+    if (server) { syncList(table, [prev], [], currentUserId()).catch(fail); return; }
+    writeLocalDoc(key, prev, true);
+  }, [key, server, table, fail]);
+
+  return [item, save, remove, loaded];
+}
+
+/** 로컬 모드 — key 목록에서 한 건 바꿔 넣기/지우기 + 같은 탭의 다른 화면(useLocalList)에 알리기 */
+function writeLocalDoc<T extends { id: string }>(key: string, item: T, remove: boolean) {
+  let list: T[] = [];
+  try { list = JSON.parse(localStorage.getItem(key) ?? '[]') as T[]; } catch { list = []; }
+  const has = list.some(x => x.id === item.id);
+  const next = remove ? list.filter(x => x.id !== item.id) : (has ? list.map(x => (x.id === item.id ? item : x)) : [...list, item]);
+  try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* 무시 */ }
+  try { window.dispatchEvent(new CustomEvent(LIST_EVT, { detail: { key, next } })); } catch { /* 무시 */ }
+}
+
+/** 훅 없이 한 건 넣기 — 새 글 등록처럼 목록을 받아 올 필요가 없을 때 (커플홈: RP LOG 본문 등록) */
+export function putDoc<T extends { id: string }>(key: string, item: T): Promise<void> {
+  const table = TABLE_OF[key];
+  if (isServerMode() && table) return syncList(table, [], [item], currentUserId());
+  writeLocalDoc(key, item, false);
+  return Promise.resolve();
+}
+
+/** 훅 없이 목록 한 번 읽기 — 드물게 전체를 훑어야 할 때만 (예: 옛 로그 본문에 권한 목록 채우기) */
+export async function loadListOnce<T extends { id: string }>(key: string): Promise<T[]> {
+  const table = TABLE_OF[key];
+  if (isServerMode() && table) return fetchList<T>(table);
+  try { return JSON.parse(localStorage.getItem(key) ?? '[]') as T[]; } catch { return []; }
+}
+
+/** 훅 없이 목록 차이 저장 — loadListOnce로 받은 것을 고쳐 돌려줄 때 */
+export async function saveListDiff<T extends { id: string }>(key: string, prev: T[], next: T[]): Promise<void> {
+  const table = TABLE_OF[key];
+  if (isServerMode() && table) return syncList(table, prev, next, currentUserId());
+  try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* 무시 */ }
+  try { window.dispatchEvent(new CustomEvent(LIST_EVT, { detail: { key, next } })); } catch { /* 무시 */ }
 }
 
 /* ---------- 시드 (데모) ---------- */

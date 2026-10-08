@@ -10,8 +10,8 @@ import { useAuth } from '@/lib/auth';
 import { useMenuSettings } from '@/lib/menuStore';
 import { useMembers } from '@/lib/members';
 import { trpgEditorIds } from '@/lib/trpgPerm';
-import { useLocalList, newId } from '@/lib/postStore';
-import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, saveLogBody } from '@/lib/galleryStore';
+import { useLocalList, newId, putDoc } from '@/lib/postStore';
+import { TrpgLog, TRPG_SEED, TrpgLogBody, bodyVisibility, saveLogBody } from '@/lib/galleryStore';
 import { useSections, filterSection, secStamp, MAIN_SEC } from '@/lib/sectionStore';
 import { Modal } from '@/components/ui/Modal';
 import { KInput, KSelect, KCheck } from '@/components/ui/Kit';
@@ -129,7 +129,6 @@ function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds, faces, face
   const router = useRouter();
   const toast = useToast();
   const [logsAll, setLogsAll, logsLoaded] = useLocalList<TrpgLog>('ohome.trpg.v1', TRPG_SEED);
-  const [bodies, setBodies, bodiesLoaded] = useLocalList<TrpgLogBody>('ohome.trpgbody.v1', TRPG_BODY_SEED);
   const { list } = useSections();
   const secs = list('trpg');   // RP LOG를 여러 개로 만들었으면 어디에 올릴지 고른다
   const { user } = useAuth();
@@ -144,7 +143,7 @@ function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds, faces, face
   const [fmt, setFmt] = useState<'html' | 'text'>('html');
   const [busy, setBusy] = useState(false);
   const [postedId, setPostedId] = useState<string | null>(null);
-  const ready = logsLoaded && bodiesLoaded;
+  const ready = logsLoaded;
 
   const post = async () => {
     if (!title.trim()) { toast('제목을 입력해 주세요'); return; }
@@ -195,7 +194,7 @@ function PostToTrpg({ room, msgs, chars, sub, time, style, rightIds, faces, face
         ...secStamp(secId),
       };
       setLogsAll([log, ...logsAll]);
-      setBodies([...bodies, body]);
+      void putDoc('ohome.trpgbody.v1', body);   // 본문은 한 건만 넣는다 (커플홈 — 전체 본문을 받지 않는다)
       setPostedId(id);
       toast('RP LOG에 올렸습니다');
     } finally {

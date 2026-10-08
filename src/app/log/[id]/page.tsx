@@ -6,8 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useHrefBlock } from '@/components/shell/MenuGuard';
 import { sectionHref, MAIN_SEC, secStamp, useSectionTitle } from '@/lib/sectionStore';
 import { useAuth } from '@/lib/auth';
-import { useLocalList, newId } from '@/lib/postStore';
-import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, showAsHtml, decodeLogText, logNo, saveLogBody, logPath } from '@/lib/galleryStore';
+import { useLocalList, newId, useOneDoc } from '@/lib/postStore';
+import { TrpgLog, TRPG_SEED, TrpgLogBody, bodyVisibility, showAsHtml, decodeLogText, logNo, saveLogBody, logPath } from '@/lib/galleryStore';
 import { isValidSlug, slugify } from '@/lib/link';
 import { Relation, REL_SEED, Character, CHAR_SEED, charGrant } from '@/lib/charStore';
 import { applyLogSides, rpSpeakers, rpLogHtml, type RpLogSrc } from '@/lib/rpLog';
@@ -58,7 +58,6 @@ export default function TrpgDetailPage() {
   // 본문은 목록과 분리 저장 (v2.0 — 나만보기 로그도 목록엔 뜨게 하려고 목록 문서의 질의 조건이
   // listHidden으로 느슨해졌는데, 본문까지 같이 있으면 그 질의로 본문도 함께 새어 나간다).
   // 이 목록에 없는 id는 "권한이 없어 애초에 안 받아졌다"는 뜻 — 서버가 알아서 걸러 준다
-  const [bodies, setBodies] = useLocalList<TrpgLogBody>('ohome.trpgbody.v1', TRPG_BODY_SEED);
   const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
   const [allChars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
   // 수정 권한 (커플홈 사용자 요청 — "수정 권한은 멤버에게도"): 관리자 · 등록한 본인 · 등록 권한이 있는 회원(editorIds, trpgPerm.ts)
@@ -82,13 +81,14 @@ export default function TrpgDetailPage() {
   const l = found ?? (lastIdRef.current ? logs.find(x => x.id === lastIdRef.current) : undefined);
   useEffect(() => { if (found) lastIdRef.current = found.id; }, [found]);
   const id = l?.id ?? key;   // 아래는 전부 진짜 id로 (본문 문서·저장·비밀번호 열람 기억)
+  // 본문은 **이 로그 한 건만** 읽고 쓴다 (커플홈 사용자 제보 — 전체 본문을 받느라 느렸다). 권한이 없으면 애초에 안 온다 (undefined)
+  const [bd, saveBody, removeBody] = useOneDoc<TrpgLogBody>('ohome.trpgbody.v1', l ? l.id : undefined);
   /* 이 글이 속한 곳이 비공개면 주소로 들어와도 열리지 않게 (v2.0 사용자 요청).
      글 주소에는 섹션이 없어 MenuGuard가 못 막는다 — 글을 읽어 소속을 알아낸 여기서 판정한다.
      **다른 early return보다 먼저 불러야 한다**(훅이므로 렌더마다 개수가 같아야 한다) */
   const blocked = useHrefBlock(l && sectionHref('trpg', l.secId ?? MAIN_SEC));
   // 큰 글씨 — 추가 섹션이면 그 이름, 눌렀을 때도 그 목록으로 (v2.0 사용자 제보)
   const tt = useSectionTitle('trpg', l?.secId, 'RP LOG');
-  const bd = bodies.find(x => x.id === id);   // 분리 저장된 본문 — 권한이 없으면 애초에 안 온다 (undefined)
 
   // 접근권한 (4.3) — 관리자 / 공개범위 충족 / 비밀번호 입력자 /
   // 연동 자관의 상대방(멤버 캐릭터에 권한이 부여된 회원)은 무조건 열람 (3차 회원-캐릭터 연결, v1.9)
@@ -111,9 +111,10 @@ export default function TrpgDetailPage() {
   // 이 로그를 볼 수 없으면(없거나, 권한도 비밀번호도 없으면) 홈으로 — 예전엔 이 자리에 "열람 권한이
   // 없습니다" 문구만 남아 있었는데, 로그아웃 등으로 권한을 잃은 직후엔 계속 그 화면에 머무를 이유가
   // 없다는 사용자 요청으로 홈으로 보낸다 (v2.0)
+  const leavingRef = useRef(false);   // 삭제해서 떠나는 중 — 「없는 로그 → 홈」으로 튕기지 않고 목록으로 가게 (커플홈)
   useEffect(() => {
     if (!loaded) return;
-    if (!l) { router.replace('/'); return; }
+    if (!l) { if (!leavingRef.current) router.replace('/'); return; }
     if (!baseAllowed && !unlocked && !l.password) router.replace('/');
   }, [loaded, l, baseAllowed, unlocked, router]);
   const tryUnlock = () => {
@@ -188,7 +189,7 @@ export default function TrpgDetailPage() {
       visibility: bodyVisibility(l), ...secStamp(l.secId ?? MAIN_SEC),
     };
     // 본문 문서는 뒤에 붙인다 (기존 본문들의 자리가 밀려 재저장되지 않게 — saveEdit와 같은 이유)
-    setBodies(bd ? bodies.map(x => x.id === id ? nextBody : x) : [...bodies, nextBody]);
+    saveBody(nextBody);
     setLogs(logs.map(x => x.id === id ? { ...x, ...logPatch, editorIds } : x));
     setBodyText(null);   // 본문 다시 로드 — 프레임이 다시 뜨면 onFrameLoad가 편집모드를 다시 켠다
   };
@@ -333,7 +334,7 @@ export default function TrpgDetailPage() {
     };
     // 새 본문 문서는 뒤에 붙인다 (v2.0 포크 제보) — 앞에 끼우면 기존 본문 전체의 자리가 밀려
     // 재저장 대상이 되고, 큰 본문이 쌓인 홈에서는 그 합이 쓰기 한도를 넘어 저장이 실패했다
-    setBodies(bd ? bodies.map(x => x.id === id ? nextBody : x) : [...bodies, nextBody]);
+    saveBody(nextBody);
     if (bodyMode !== 'keep') setBodyText(null); // 본문 다시 로드
     // 별명을 바꿨으면 지금 주소(옛 별명)로는 더 못 찾으니 새 주소로 — id 주소에서 바꾼 경우에도 별명 주소를 보여 준다
     if ((nextLog.slug ?? '') !== (l?.slug ?? '')) router.replace(logPath(nextLog));
@@ -870,8 +871,9 @@ if(!on){hide();if(tools&&tools.parentNode)tools.parentNode.removeChild(tools)}}}
         onClose={() => setDelAsk(false)}
         buttons={[
           { label: 'DELETE', kind: 'accent', onClick: () => {
+            leavingRef.current = true;
             setLogs(logs.filter(x => x.id !== l.id));
-            setBodies(bodies.filter(x => x.id !== l.id));   // 분리 저장된 본문도 함께 삭제 (v2.0)
+            removeBody();   // 분리 저장된 본문도 함께 삭제 (v2.0)
             router.push(tt.href);
           } },
           { label: 'CANCEL', kind: 'ghost', onClick: () => setDelAsk(false) },

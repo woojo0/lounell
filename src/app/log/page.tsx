@@ -8,8 +8,8 @@ import { useSectionParam, filterSection, sectionSetter, secStamp, MAIN_SEC } fro
 import { useMenuSettings } from '@/lib/menuStore';
 import { useMembers } from '@/lib/members';
 import { canAddTrpg, trpgEditorIds, sameIds } from '@/lib/trpgPerm';
-import { useLocalList, newId } from '@/lib/postStore';
-import { TrpgLog, TRPG_SEED, TrpgLogBody, TRPG_BODY_SEED, bodyVisibility, decodeLogText, logNo, saveLogBody, isHtmlBody, logPath } from '@/lib/galleryStore';
+import { useLocalList, newId, putDoc, loadListOnce, saveListDiff } from '@/lib/postStore';
+import { TrpgLog, TRPG_SEED, TrpgLogBody, bodyVisibility, decodeLogText, logNo, saveLogBody, isHtmlBody, logPath } from '@/lib/galleryStore';
 import { isValidSlug, slugify } from '@/lib/link';
 import { Relation, REL_SEED, Character, CHAR_SEED } from '@/lib/charStore';
 import { SearchBar, KInput, KTextarea, KRadio, KSelect, KDate, Pager } from '@/components/ui/Kit';
@@ -44,7 +44,6 @@ function TrpgPageInner() {
   const setLogs = sectionSetter(logsAll, sec.id, setLogsAll);
   // 본문은 목록과 분리 저장 (v2.0) — 나만보기 로그도 목록엔 뜨게 하려고 목록 문서의 질의 조건이
   // listHidden으로 느슨해졌는데, 본문까지 같이 있으면 그 질의로 본문도 함께 새어 나간다
-  const [bodies, setBodies, bodiesLoaded] = useLocalList<TrpgLogBody>('ohome.trpgbody.v1', TRPG_BODY_SEED);
   const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
   const [chars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);   // 디스코드 복사본의 발화자 매칭용
   // 등록 권한 (커플홈 사용자 요청 — "등록 권한은 멤버에게도"): 환경설정 > 권한의 RP LOG 「등록」(기본 가입자)
@@ -55,18 +54,23 @@ function TrpgPageInner() {
      있는 회원」 목록을 옛 로그·본문에도 적어 둔다(이미 맞으면 아무것도 안 쓴다 — diffList가 바뀐 문서만 보낸다).
      회원이 등록할 수 있게 되기 전의 로그는 전부 관리자 것이므로 등록자가 비어 있으면 관리자로 적는다 */
   useEffect(() => {
-    if (!isAdmin || !user || !logsLoaded || !bodiesLoaded || !menuLoaded || !members.length) return;
+    if (!isAdmin || !user || !logsLoaded || !menuLoaded || !members.length) return;
     const nl = logsAll.map(l => {
       const w = trpgEditorIds(menuSet, l.secId ?? MAIN_SEC, members);
       return sameIds(l.editorIds, w) && l.authorId ? l : { ...l, authorId: l.authorId ?? user.id, editorIds: w };
     });
-    const nb = bodies.map(b => {
-      const w = trpgEditorIds(menuSet, b.secId ?? MAIN_SEC, members);
-      return sameIds(b.editorIds, w) && b.authorId ? b : { ...b, authorId: b.authorId ?? user.id, editorIds: w };
+    // 목록 문서가 전부 맞으면 본문도 맞다고 본다 (늘 같이 적는다) — 본문 전체를 받아 오지 않는다 (느림의 원인이었다)
+    if (!nl.some((l, i) => l !== logsAll[i])) return;
+    setLogsAll(nl);
+    // 바뀐 게 있을 때만 본문 문서를 한 번 통째로 받아 같은 목록을 적는다
+    void loadListOnce<TrpgLogBody>('ohome.trpgbody.v1').then(bs => {
+      const nb = bs.map(b => {
+        const w = trpgEditorIds(menuSet, b.secId ?? MAIN_SEC, members);
+        return sameIds(b.editorIds, w) && b.authorId ? b : { ...b, authorId: b.authorId ?? user.id, editorIds: w };
+      });
+      if (nb.some((b, i) => b !== bs[i])) void saveListDiff('ohome.trpgbody.v1', bs, nb);
     });
-    if (nl.some((l, i) => l !== logsAll[i])) setLogsAll(nl);
-    if (nb.some((b, i) => b !== bodies[i])) setBodies(nb);
-  }, [isAdmin, user, logsLoaded, bodiesLoaded, menuLoaded, members, menuSet, logsAll, bodies, setLogsAll, setBodies]);
+  }, [isAdmin, user, logsLoaded, menuLoaded, members, menuSet, logsAll, setLogsAll]);
   const { editOn } = useMainStore();          // 편집모드 — 상단바 토글 (다른 목록과 공통)
   // 태그 필터 (커플홈 사용자 요청 — 자관이 하나뿐이라 자관 필터 대신). 자관(·AU) 필터는 자관 페이지의 「로그 더보기」(?rel=&au=)로
   // 들어왔을 때만 조용히 걸리고, 위쪽 알약으로 풀 수 있다
@@ -325,7 +329,7 @@ function TrpgPageInner() {
     // 본문 문서는 **뒤에** 붙인다 (v2.0 포크 제보) — 앞에 끼우면 기존 본문 전체의 자리가 밀려
     // 재저장 대상이 되는데, 큰 본문이 쌓인 홈에서는 그 합이 한 번의 쓰기 한도를 넘어 저장이 실패했다.
     // 본문은 id로만 찾으므로 순서는 아무 의미가 없다.
-    setBodies([...bodies, body]);
+    void putDoc('ohome.trpgbody.v1', body);   // 본문은 한 건만 넣는다 — 목록을 받아 올 필요 없이 (커플홈)
     setAddOpen(false);
     setNNo(''); setNSlug(''); setNTags([]); setNVis('public'); setNPw(''); setNListHidden(false); setNTitle(''); setNCatch(''); setNWriter(''); setNWith(''); setNBody(''); setNFileName(''); setNDate(''); setNFile(null);
     setNThumb(null); setNThumbUrl(''); setNThumbCrop(undefined);

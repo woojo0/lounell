@@ -60,6 +60,32 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
+-- ── 5-1. role은 관리자만 바꿀 수 있다 (보안 제보 — 회원이 자기 profiles 행의 role을 'admin'으로 고쳐 스스로 승격할 수 있었다) ──
+-- 아래 profiles_update_own 정책은 「자기 행 수정」을 열(column) 구분 없이 허용한다. 접속 정보(anon 키)는 원래 공개라
+-- 로그인한 회원이면 누구나 PostgREST로 자기 행을 고칠 수 있으므로, role 열만은 트리거로 지킨다.
+--  · UPDATE: 관리자가 아니면 role은 예전 값 그대로 (조용히 되돌린다 — 앱의 프로필 저장(upsert)은 role을 보내지 않는다)
+--  · INSERT: 이미 관리자가 있으면 admin으로 들어올 수 없다 (첫 가입자 = 관리자 규칙은 그대로 — 그때는 관리자가 없다)
+create or replace function public.guard_profile_role()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'UPDATE' then
+    if new.role is distinct from old.role and not public.is_admin() then
+      new.role := old.role;
+    end if;
+  elsif tg_op = 'INSERT' then
+    if new.role = 'admin' and not public.is_admin()
+       and exists (select 1 from public.profiles where role = 'admin') then
+      new.role := 'member';
+    end if;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists profiles_guard_role on public.profiles;
+create trigger profiles_guard_role
+  before insert or update on public.profiles
+  for each row execute function public.guard_profile_role();
+
 -- ── 6. 콘텐츠 테이블 23종 ────────────────────────────────────
 -- 항목 하나 = 행 하나 (행 단위 권한·실시간). 항목의 세부 필드는 data(jsonb)에 담고,
 -- 권한·정렬·필터에 쓰는 값만 별도 컬럼으로 뽑아 둔다.

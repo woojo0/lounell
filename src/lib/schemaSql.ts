@@ -40,12 +40,50 @@ returns boolean language sql stable security definer set search_path = public as
   select exists (select 1 from public.profiles p where p.id = auth.uid() and p.role = 'admin')
 $$;
 
--- ── 5. 가입 시 프로필 자동 생성 (첫 가입자 = 관리자) ─────────
+-- ── 4-1. 회원 판별 함수 — 프로필 행이 있는 계정만 회원 (보안 제보) ──────
+-- 로그인 계정은 공개 anon 키만으로 누구나 만들 수 있다(가입 화면을 거치지 않고 Auth API로).
+-- 그래서 「로그인했다 = 회원」으로 보지 않고, 가입 트리거(5)가 만든 프로필 행이 있어야 회원이다.
+-- 관리자가 회원 목록에서 지운 계정은 프로필이 없어 회원 권한도 없다 (계정 자체는 콘솔에서만 지울 수 있다).
+create or replace function public.is_member()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.profiles p where p.id = auth.uid())
+$$;
+
+-- ── 4-2. 가입코드 검사 — 코드 자체는 관리자만 읽을 수 있고(7), 맞는지만 알려 준다 ──
+-- 가입 화면이 틀린 코드를 바로 알려 주기 위한 것 — 가입 자체는 5의 트리거가 막는다.
+create or replace function public.check_invite(code text)
+returns boolean language sql stable security definer set search_path = public as $$
+  select coalesce(trim(code), '') <> ''
+     and trim(code) = coalesce(
+       nullif(trim((select s.value #>> '{}' from public.site_settings s where s.key = 'ohome.invite.v1')), ''),
+       'WELCOME')
+$$;
+grant execute on function public.check_invite(text) to anon, authenticated;
+
+-- ── 4-3. 행이 이미 있는지 (정책용) ──────────────────────────────
+-- upsert는 INSERT 정책도 거친다. 편집 권한을 받은 회원이 남의 글을 「다시 저장」하는 것은 허용하고
+-- 남의 이름으로 「새로 만드는」 것은 막으려면 테이블을 봐야 하는데, 정책 안에서 같은 테이블을 직접 보면
+-- 재귀 오류가 난다 → 정의자 권한 함수로 본다
+create or replace function public.row_exists(tbl text, row_id text)
+returns boolean language plpgsql stable security definer set search_path = public as $$
+declare hit boolean;
+begin
+  execute format('select exists (select 1 from public.%I where id = $1)', tbl) into hit using row_id;
+  return hit;
+end $$;
+
+-- ── 5. 가입 시 프로필 자동 생성 (첫 가입자 = 관리자) + 가입코드 검사 ─────────
+-- 가입코드 검사는 여태 가입 화면(브라우저)에서만 했다 — 공개 anon 키로 Auth API에 직접 가입하면 코드 없이
+-- 회원이 됐다 (보안 제보). 이제 코드가 틀리면 여기서 예외를 던져 계정 자체가 만들어지지 않는다.
+-- 코드는 가입 화면이 user metadata(invite)에 실어 보낸다. 첫 가입자(관리자)는 코드 없이 된다.
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 declare existing int;
 begin
   select count(*) into existing from public.profiles;
+  if existing > 0 and not public.check_invite(new.raw_user_meta_data->>'invite') then
+    raise exception 'invalid invite code';
+  end if;
   insert into public.profiles (id, nickname, role)
   values (
     new.id,
@@ -139,49 +177,63 @@ begin
     execute format('alter table public.%I enable row level security', t);
     execute format('create index if not exists %I on public.%I (sort)', t || '_sort_idx', t);
 
-    -- 읽기: 전체공개 / 멤버공개(로그인) / 본인 글 / 관리자
+    -- 읽기: 전체공개 / 멤버공개(회원 — 프로필이 있는 계정) / 본인 글 / 관리자
     execute format('drop policy if exists "read" on public.%I', t);
     execute format($p$
       create policy "read" on public.%I for select using (
         visibility = 'public'
-        or (visibility = 'member' and auth.uid() is not null)
+        or (visibility = 'member' and (select public.is_member()))
         or author_id = auth.uid()
         or public.is_admin()
       )$p$, t);
 
-    -- 쓰기: 로그인 회원 (방명록만 아래에서 비로그인 허용으로 덮어씀)
+    -- 쓰기: 회원 — 글의 주인(author_id)은 자기 자신 (남의 이름으로는 만들 수 없다 — 보안 제보).
+    -- 관리자는 백업 복원 때문에 예외. 편집 권한을 받은 회원(editor_ids)은 남의 글을 다시 저장(upsert — INSERT 정책도
+    -- 거친다)할 수 있어야 하므로, **이미 있는 행**에 한해 예외 (새 행을 남의 이름으로 만드는 것은 불가).
+    -- (방명록·댓글·알림은 아래에서 따로 — 비로그인 방문자 허용)
     execute format('drop policy if exists "insert" on public.%I', t);
     execute format($p$
-      create policy "insert" on public.%I for insert to authenticated with check (true)$p$, t);
+      create policy "insert" on public.%I for insert to authenticated
+        with check ((select public.is_member())
+                    and (author_id = auth.uid() or public.is_admin()
+                         or (auth.uid()::text = any(editor_ids) and public.row_exists(%L, id))))$p$, t, t);
 
-    -- 수정·삭제: 본인 · 편집 권한을 받은 회원(editor_ids) · 관리자
+    -- 수정·삭제: 본인 · 편집 권한을 받은 회원(editor_ids) · 관리자 (모두 회원이어야 한다)
     execute format('drop policy if exists "update" on public.%I', t);
     execute format($p$
       create policy "update" on public.%I for update to authenticated
-        using (author_id = auth.uid() or public.is_admin()
-               or auth.uid()::text = any(editor_ids))$p$, t);
+        using ((select public.is_member())
+               and (author_id = auth.uid() or public.is_admin()
+                    or auth.uid()::text = any(editor_ids)))$p$, t);
 
     execute format('drop policy if exists "delete" on public.%I', t);
     execute format($p$
       create policy "delete" on public.%I for delete to authenticated
-        using (author_id = auth.uid() or public.is_admin()
-               or auth.uid()::text = any(editor_ids))$p$, t);
+        using ((select public.is_member())
+               and (author_id = auth.uid() or public.is_admin()
+                    or auth.uid()::text = any(editor_ids)))$p$, t);
   end loop;
 end $$;
 
--- 방명록·게시판 댓글은 비로그인 방문자도 남길 수 있음 (닉네임+비밀번호 방식)
+-- 방명록·게시판 댓글은 비로그인 방문자도 남길 수 있음 (닉네임+비밀번호 방식) — 그때 author_id는 비어 있다.
+-- 회원이 남길 때는 자기 uid여야 한다 (남의 이름으로는 못 만든다 — 보안 제보)
 drop policy if exists "insert" on public.guestbook;
-create policy "insert" on public.guestbook for insert with check (true);
+create policy "insert" on public.guestbook for insert
+  with check (author_id is null or (author_id = auth.uid() and (select public.is_member())) or public.is_admin());
 
 -- 댓글도 비로그인 방문자가 남길 수 있다 (닉네임+비밀번호 방식 — 방명록과 동일, v2.0).
 -- 수정·삭제는 위 공통 정책 그대로: 작성자 본인 또는 관리자.
 drop policy if exists "insert" on public.comments;
-create policy "insert" on public.comments for insert with check (true);
+create policy "insert" on public.comments for insert
+  with check (author_id is null or (author_id = auth.uid() and (select public.is_member())) or public.is_admin());
 
 -- 알림도 비로그인 방문자가 만들 수 있다 (v2.0) — 손님 댓글·방명록이 관리자에게 알림을 남겨야 하므로.
--- 행의 주인(author_id)은 받는 사람이라, 읽기·수정·삭제는 받는 사람과 관리자만 (공통 정책 그대로).
+-- 행의 주인(author_id)은 받는 사람이라 남의 uid를 적는 게 정상 — 회원은 누구에게나, 손님은 관리자에게만.
+-- 읽기·수정·삭제는 받는 사람과 관리자만 (공통 정책 그대로).
 drop policy if exists "insert" on public.notifications;
-create policy "insert" on public.notifications for insert with check (true);
+create policy "insert" on public.notifications for insert
+  with check ((select public.is_member())
+              or author_id in (select p.id from public.profiles p where p.role = 'admin'));
 
 -- ── 7. 사이트 설정 권한 (읽기 공개 · 쓰기 관리자) ────────────
 alter table public.profiles enable row level security;
@@ -194,24 +246,28 @@ drop policy if exists "profiles_update_own" on public.profiles;
 create policy "profiles_update_own" on public.profiles for update to authenticated
   using (auth.uid() = id or public.is_admin());
 -- 프로필 저장은 upsert(INSERT 경로)라 INSERT 정책이 없으면 행이 이미 있어도 거부된다
--- ("new row violates row-level security policy" — v2.0 포크 제보). 자기 행만 만들 수 있게 허용.
+-- ("new row violates row-level security policy" — v2.0 포크 제보). 자기 행만.
+-- 단, 행이 이미 있는(= 가입 트리거가 만든) 계정만 — 관리자가 회원 목록에서 지운 계정이 자기 프로필을
+-- 다시 만들어 회원으로 돌아오지 못하게 (보안 제보). 프로필은 가입 트리거가 만들므로 회원이 새로 만들 일은 없다.
 drop policy if exists "profiles_insert_own" on public.profiles;
 create policy "profiles_insert_own" on public.profiles for insert to authenticated
-  with check (auth.uid() = id);
+  with check ((auth.uid() = id and (select public.is_member())) or public.is_admin());
 drop policy if exists "profiles_delete_admin" on public.profiles;
 create policy "profiles_delete_admin" on public.profiles for delete to authenticated
   using (public.is_admin());
 
+-- invite_codes 표는 앱이 쓰지 않는다 — 관리자만 (예전엔 누구나 읽고 고칠 수 있었다 — 보안 제보)
 drop policy if exists "invite_select" on public.invite_codes;
-create policy "invite_select" on public.invite_codes for select using (true);
+create policy "invite_select" on public.invite_codes for select to authenticated using (public.is_admin());
 drop policy if exists "invite_write" on public.invite_codes;
 create policy "invite_write" on public.invite_codes for all to authenticated
   using (public.is_admin()) with check (public.is_admin());
 drop policy if exists "invite_use" on public.invite_codes;
-create policy "invite_use" on public.invite_codes for update using (used_by is null);
 
+-- 사이트 설정은 읽기 공개 — 단 가입코드(ohome.invite.v1)만은 관리자만 (방문자가 읽을 수 있으면 코드가 무의미하다 — 보안 제보)
 drop policy if exists "settings_select" on public.site_settings;
-create policy "settings_select" on public.site_settings for select using (true);
+create policy "settings_select" on public.site_settings for select
+  using (key <> 'ohome.invite.v1' or public.is_admin());
 drop policy if exists "settings_write" on public.site_settings;
 create policy "settings_write" on public.site_settings for all to authenticated
   using (public.is_admin()) with check (public.is_admin());
@@ -223,10 +279,13 @@ on conflict (id) do nothing;
 
 drop policy if exists "ohome_read" on storage.objects;
 create policy "ohome_read" on storage.objects for select using (bucket_id = 'ohome');
+-- 올리기·고치기는 회원만 (프로필이 있는 계정 — 보안 제보: 계정만 만든 외부인이 저장소를 채우지 못하게)
 drop policy if exists "ohome_write" on storage.objects;
-create policy "ohome_write" on storage.objects for insert to authenticated with check (bucket_id = 'ohome');
+create policy "ohome_write" on storage.objects for insert to authenticated
+  with check (bucket_id = 'ohome' and (select public.is_member()));
 drop policy if exists "ohome_update" on storage.objects;
-create policy "ohome_update" on storage.objects for update to authenticated using (bucket_id = 'ohome');
+create policy "ohome_update" on storage.objects for update to authenticated
+  using (bucket_id = 'ohome' and (select public.is_member()));
 drop policy if exists "ohome_delete" on storage.objects;
 create policy "ohome_delete" on storage.objects for delete to authenticated
   using (bucket_id = 'ohome' and (owner = auth.uid() or public.is_admin()));
@@ -253,5 +312,6 @@ notify pgrst, 'reload schema';
 
 -- ── 완료 ─────────────────────────────────────────────────────
 -- 이 스크립트를 실행한 뒤, 홈의 설치 화면에서 [연결 확인]을 누르면 검증됩니다.
--- 첫 번째로 가입하는 계정이 자동으로 관리자가 됩니다.
+-- 첫 번째로 가입하는 계정이 자동으로 관리자가 됩니다. 그 다음부터는 가입코드(환경설정 → 회원/보안,
+-- 기본 WELCOME — 꼭 바꾸세요)를 맞혀야 가입됩니다. 가입 화면을 거치지 않고 계정만 만들 수는 없습니다.
 `;

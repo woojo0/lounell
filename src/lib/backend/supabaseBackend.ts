@@ -86,9 +86,19 @@ export async function createSupabaseBackend(
       return error ? { ok: false, error: error.message } : { ok: true };
     },
 
-    async signUp(id, password, nickname) {
-      const { error } = await sb.auth.signUp({ email: id, password, options: { data: { nickname } } });
-      return error ? { ok: false, error: error.message } : { ok: true };
+    async signUp(id, password, nickname, invite) {
+      // 가입코드는 서버(가입 트리거)가 검사한다 — 브라우저 검사는 공개 anon 키로 Auth API에 직접 가입하면 우회된다 (보안 제보).
+      // 트리거가 거부하면 Auth는 「Database error saving new user」라고만 답해 원인을 알 수 없으므로, 먼저 check_invite로
+      // 물어 틀린 코드를 바로 알려 준다 (예전 SQL에는 이 함수가 없다 → 건너뜀). invite가 없으면 첫 관리자 계정(설치 화면)
+      if (invite !== undefined) {
+        const chk = await sb.rpc('check_invite', { code: invite });
+        if (!chk.error && chk.data === false) return { ok: false, error: '가입코드가 올바르지 않습니다.' };
+      }
+      const data = invite !== undefined ? { nickname, invite } : { nickname };
+      const { error } = await sb.auth.signUp({ email: id, password, options: { data } });
+      if (!error) return { ok: true };
+      if (/database error/i.test(error.message)) return { ok: false, error: '가입코드가 올바르지 않습니다. (서버가 가입을 거부했습니다)' };
+      return { ok: false, error: error.message };
     },
 
     async signOut() { await sb.auth.signOut(); },
@@ -121,6 +131,24 @@ export async function createSupabaseBackend(
 
     // Supabase는 스키마의 트리거가 첫 가입자를 관리자로 만들어 준다 — 추가 작업 없음
     async claimOwner() { return { ok: true }; },
+
+    // 가입코드 — site_settings의 ohome.invite.v1 (새 SQL에서는 관리자만 읽을 수 있다).
+    // check_invite 함수가 없으면 예전 SQL — 코드가 공개돼 있고 서버가 검사하지 않는다 → legacy
+    async getInviteCode() {
+      const { data } = await sb.from('site_settings').select('value').eq('key', 'ohome.invite.v1').maybeSingle();
+      const v = (data as { value?: unknown } | null)?.value;
+      const code = typeof v === 'string' && v.trim() ? v.trim() : 'WELCOME';
+      const probe = await sb.rpc('check_invite', { code: '' });
+      return { code, legacy: !!probe.error };
+    },
+
+    async setInviteCode(code) {
+      const { error } = await sb.from('site_settings')
+        .upsert({ key: 'ohome.invite.v1', value: code.trim(), updated_at: new Date().toISOString() }, { onConflict: 'key' });
+      if (error) return { ok: false, error: error.message };
+      const probe = await sb.rpc('check_invite', { code: '' });
+      return probe.error ? { ok: true, legacy: true } : { ok: true };
+    },
 
     async listMembers() {
       // avatar_url도 함께 — 이미지 정리가 프로필 사진을 「안 쓰는 파일」로 지우지 않게 (v2.0 사용자 제보)

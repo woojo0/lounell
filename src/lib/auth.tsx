@@ -41,12 +41,28 @@ const MOCK_REG_KEY = 'ohome.mockreg.v1';
 const INVITE_KEY = 'ohome.invite.v1';    // 가입코드 — 환경설정 > 회원/보안
 const SETUP_KEY = 'ohome.setup.v1';      // 설치 화면을 마쳤는지
 
-/** 현재 가입코드 — 관리자가 정한 값(서버 공유), 없으면 기본 WELCOME */
+/** 현재 가입코드 (브라우저 저장 모드) — 관리자가 정한 값, 없으면 기본 WELCOME.
+ *  서버 모드에서는 코드가 공개 설정에 있지 않으므로(관리자만 읽는 자리 — 보안 제보) loadInviteCode()를 쓴다 */
 export function inviteCode(): string {
-  return getSetting<string>(INVITE_KEY, 'WELCOME') || 'WELCOME';
+  return (getSetting<string>(INVITE_KEY, 'WELCOME') || 'WELCOME').trim();
 }
 export function setInviteCode(code: string) {
   setSetting(INVITE_KEY, code.trim());
+}
+/** 가입코드 읽기 — 서버 모드는 Backend(관리자만 읽을 수 있는 자리), 아니면 브라우저 설정.
+ *  legacy: 서버 규칙·SQL이 예전 것이라 서버가 코드를 검사하지 않는다 (환경설정이 안내문을 띄운다) */
+export async function loadInviteCode(): Promise<{ code: string; legacy?: boolean }> {
+  const be = backend();
+  if (isServerMode() && be) {
+    try { return await be.getInviteCode(); } catch { return { code: inviteCode() }; }
+  }
+  return { code: inviteCode() };
+}
+export async function saveInviteCode(code: string): Promise<{ ok: boolean; error?: string; legacy?: boolean }> {
+  const be = backend();
+  if (isServerMode() && be) return be.setInviteCode(code.trim());
+  setInviteCode(code);
+  return { ok: true };
 }
 
 export function isSetupDone(): boolean {
@@ -117,6 +133,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => { alive = false; off(); };
   }, [server, be]);
 
+  // Firebase: 관리자가 들어오면 가입코드를 예전 자리(공개 설정)에서 관리자 전용 자리(meta/invite)로 옮긴다 —
+  // Backend.getInviteCode가 한 번만 옮기고, 예전 규칙이면 아무것도 안 한다 (보안 제보 후속)
+  useEffect(() => {
+    if (!server || !be || be.kind !== 'firebase' || user?.role !== 'admin') return;
+    void be.getInviteCode().catch(() => undefined);
+  }, [server, be, user?.role]);
+
   const login = useCallback(async (id: string, password: string): Promise<Result> => {
     if (server && be) {
       const r = await be.signIn(id.trim(), password);
@@ -132,9 +155,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // 회원가입 — 가입코드(초대코드) 방식
   const signup = useCallback(async (id: string, password: string, nickname: string, code: string): Promise<Result> => {
     if (!id || !password || !nickname) return { ok: false, error: '아이디·비밀번호·닉네임을 모두 입력해 주세요.' };
-    if (code !== inviteCode()) return { ok: false, error: '가입코드가 올바르지 않습니다.' };
+    const c = code.trim();
     if (server && be) {
-      const r = await be.signUp(id.trim(), password, nickname.trim());
+      // 가입코드는 서버가 검사한다 (Firestore 규칙 / Supabase 가입 트리거) — 브라우저 검사는 공개 접속 정보로 Auth API에
+      // 직접 가입하면 우회된다 (보안 제보). 예전 규칙·SQL인 홈은 코드가 아직 공개 설정에 있으므로 그 값으로 먼저 거른다
+      const stored = (getSetting<string>(INVITE_KEY, '') || '').trim();
+      if (stored && c !== stored) return { ok: false, error: '가입코드가 올바르지 않습니다.' };
+      const r = await be.signUp(id.trim(), password, nickname.trim(), c);
       if (!r.ok) return { ok: false, error: r.error ?? '가입에 실패했습니다.' };
       // 계정이 만들어지는 순간 로그인 상태가 되며 사용자 정보가 먼저 계산되는데,
       // 그때는 닉네임(프로필)이 아직 저장되기 전이라 이메일이 이름 자리에 들어간다.
@@ -142,6 +169,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       try { const u = await be.currentUser(); if (u) setUser(u); } catch { /* 무시 */ }
       return { ok: true };
     }
+    if (c !== inviteCode()) return { ok: false, error: '가입코드가 올바르지 않습니다.' };
     if (MOCK_ACCOUNTS[id] || mockRegistry()[id]) return { ok: false, error: '이미 사용 중인 아이디입니다.' };
     const reg = mockRegistry();
     reg[id] = { password, user: { id, nickname, role: 'member' } };

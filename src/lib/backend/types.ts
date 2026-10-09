@@ -48,7 +48,10 @@ export interface Backend {
   currentUser(): Promise<BackendUser | null>;
   onAuthChange(cb: (u: BackendUser | null) => void): () => void;
   signIn(id: string, password: string): Promise<{ ok: boolean; error?: string }>;
-  signUp(id: string, password: string, nickname: string): Promise<{ ok: boolean; error?: string }>;
+  /** 회원가입 — invite(가입코드)는 서버가 검사한다 (Supabase: 가입 트리거 · Firebase: Firestore 규칙).
+   *  브라우저 검사만으로는 공개 접속 정보로 Auth API에 직접 가입하는 것을 못 막는다 (보안 제보).
+   *  invite를 넘기지 않으면 첫 관리자 계정(설치 화면) — 코드 검사를 거치지 않는다 */
+  signUp(id: string, password: string, nickname: string, invite?: string): Promise<{ ok: boolean; error?: string }>;
   signOut(): Promise<void>;
   resetPassword(email: string): Promise<{ ok: boolean; error?: string }>;
   /** 내 정보 수정 — 닉네임·프로필 사진·색, 그리고 비밀번호(현재 비밀번호 확인 뒤 새 비밀번호).
@@ -59,6 +62,10 @@ export interface Backend {
   }): Promise<{ ok: boolean; error?: string }>;
   /** 첫 계정을 이 홈의 관리자로 등록 (관리자가 아직 없을 때만) */
   claimOwner(): Promise<{ ok: boolean; error?: string }>;
+  /** 가입코드 — 관리자만 읽고 쓸 수 있는 자리에 둔다 (환경설정 → 회원/보안).
+   *  legacy: 서버 규칙·SQL이 예전 것이라 코드가 아직 공개 설정에 있고 서버가 검사하지 않는다 → 규칙을 다시 적용하라고 안내 */
+  getInviteCode(): Promise<{ code: string; legacy?: boolean }>;
+  setInviteCode(code: string): Promise<{ ok: boolean; error?: string; legacy?: boolean }>;
   /** 가입 회원 목록 — 역극 참여자 선택·회원 관리 화면용.
    *  avatarUrl도 내준다 (v2.0 사용자 제보) — 이미지 정리가 콘텐츠·설정만 훑던 시절, 프로필 사진은
    *  어디에도 참조가 안 잡혀 「아무도 안 쓰는 파일」로 지워졌다. */

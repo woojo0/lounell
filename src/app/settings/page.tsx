@@ -2,7 +2,7 @@
 // 환경설정 (기획서 5장) — 0차: 「디자인」 탭(테마) 실동작.
 // 나머지 카테고리는 해당 기능 마일스톤에서 함께 구현.
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { useAuth, inviteCode, setInviteCode } from '@/lib/auth';
+import { useAuth, loadInviteCode, saveInviteCode } from '@/lib/auth';
 import { useMembers } from '@/lib/members';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ThemeVars } from '@/lib/theme';
@@ -1080,9 +1080,15 @@ function MemberPane() {
   const router = useRouter();   // 회원 이름 클릭 → 회원 정보 페이지 (v1.9)
   const [code, setCode] = useState('');
   const [codeLoaded, setCodeLoaded] = useState(false);
+  const [codeLegacy, setCodeLegacy] = useState(false);   // 서버 규칙·SQL이 예전 것 — 서버가 가입코드를 검사하지 않는다
   const [regVer, setRegVer] = useState(0);   // 가입 계정 삭제 후 목록 갱신용
   const [removedIds, setRemovedIds] = useState<string[]>([]);   // 서버 모드에서 방금 지운 회원
-  useEffect(() => { setCode(inviteCode()); setCodeLoaded(true); }, []);
+  // 서버 모드의 가입코드는 관리자만 읽을 수 있는 자리에 있다 (보안 제보) — 설정 캐시가 아니라 Backend에서 읽는다
+  useEffect(() => {
+    let alive = true;
+    void loadInviteCode().then(r => { if (alive) { setCode(r.code); setCodeLegacy(!!r.legacy); setCodeLoaded(true); } });
+    return () => { alive = false; };
+  }, []);
   void regVer;
 
   const members = useMembers();
@@ -1146,13 +1152,22 @@ function MemberPane() {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <KInput value={code} onChange={e => setCode(e.target.value)} style={{ width: 220 }} />
           <button className="btn btn-dark" disabled={!codeLoaded}
-            onClick={() => {
+            onClick={async () => {
               if (!code.trim()) { toast('가입코드를 입력해 주세요'); return; }
-              setInviteCode(code);
+              const r = await saveInviteCode(code);
+              if (!r.ok) { toast(`가입코드를 저장하지 못했습니다 — ${r.error ?? ''}`); return; }
+              if (r.legacy) setCodeLegacy(true);
               toast('가입코드가 변경되었습니다');
             }}>SAVE</button>
         </div>
       </div>
+      {codeLegacy && (
+        /* 규칙(SQL)이 예전 것이면 코드가 공개 설정에 있고 서버가 검사하지 않는다 — 가입 화면만 거른다 (보안 제보) */
+        <div className="d" style={{ marginTop: 8 }}>
+          ⚠ 서버 규칙이 예전 것이라 가입코드를 서버가 검사하지 않습니다 (가입 화면에서만 거릅니다). 「데이터 백업」 탭 맨 아래
+          「보안 규칙」에서 다시 적용해 주세요 — Firebase는 Firestore 규칙 다시 게시, Supabase는 설치 SQL 다시 실행.
+        </div>
+      )}
 
       <h3 style={{ marginTop: 26 }}>회원 목록</h3>
       <div className="d">기본 계정(관리자·지인회원)은 삭제할 수 없습니다 — 태그로 그룹화</div>

@@ -138,7 +138,7 @@ function imsgRows(msgs: RpMessage[], chars: Character[], opts: RpLogOpts): strin
     if (m.rp) {
       const c = chars.find(x => x.id === m.charId);
       const hex = safeHex(c?.color);
-      rows.push(`<div class="m${!opts.neutralSides && me ? ' me' : ''}" data-c="${esc(m.charId ?? '')}" data-i="${i}" style="--c:${hex};--rgb:${hexRgb(hex)}"><div class="who">${faceTag(opts, m.charId)}<span>${esc(nameOf(chars, m.charId))}</span></div><div class="txt">${esc(txt)}</div></div>`);
+      rows.push(`<div class="m${!opts.neutralSides && me ? ' me' : ''}" data-c="${esc(m.charId ?? '')}" data-i="${i}" style="--c:${hex};--rgb:${hexRgb(hex)}"><div class="who"><span>${esc(nameOf(chars, m.charId))}</span></div><div class="txt">${esc(txt)}</div></div>`);   // 메신저 로그 안의 「일반 RP」 카드에는 사진을 넣지 않는다 (사용자 확정 — 말풍선에만)
       return;
     }
     const prev = msgs[i - 1], next = msgs[i + 1];

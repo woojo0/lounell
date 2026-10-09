@@ -22,6 +22,10 @@ export function memberPool(): MemberLite[] {
   return base;
 }
 
+/** 회원 목록에서 관리자 id들 — 서버 모드는 role로, 브라우저 저장 모드는 목업 'admin' (role이 없다) */
+export const adminIdsOf = (members: MemberLite[]): string[] =>
+  members.filter(m => m.role === 'admin' || (!m.role && m.id === 'admin')).map(m => m.id);
+
 /** 화면에서 쓰는 회원 목록 — 서버 모드에서는 가입 회원을 DB에서 가져온다 */
 export function useMembers(): MemberLite[] {
   const [list, setList] = useState<MemberLite[]>(() => (isServerMode() ? [] : memberPool()));

@@ -11,6 +11,7 @@ import { RpRoom, RP_SEED, RpMessageRow, RP_MSG_KEY, RP_MSG_SEED, rpMemberIds } f
 import { Character, CHAR_SEED, Relation, REL_SEED } from '@/lib/charStore';
 import { armMsgSound, playMsgTone } from '@/lib/msgSound';
 import { readNotifs, NOTIF_EVENT } from '@/lib/notifStore';
+import { useMembers, adminIdsOf } from '@/lib/members';
 
 /** 접속 직후 몇 초는 울리지 않는다 — 서버에 쌓여 있던 알림을 처음 받아 오는 순간(syncNotifs)에 묵은 알림으로 울리지 않게 */
 const QUIET_AFTER_MOUNT_MS = 8000;
@@ -21,6 +22,7 @@ export function MsgSound() {
   const [rooms] = useLocalList<RpRoom>('ohome.rp.v1', RP_SEED);
   const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
   const [chars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
+  const members = useMembers();
   const seen = useRef<Set<string> | null>(null);
 
   useEffect(() => { armMsgSound(); }, []);
@@ -36,10 +38,10 @@ export function MsgSound() {
     const ding = fresh.some(r => {
       if (r.authorId === user.id) return false;
       const room = rooms.find(x => x.id === r.roomId);
-      return !!room && rpMemberIds(room, rels, chars).includes(user.id);
+      return !!room && rpMemberIds(room, rels, chars, adminIdsOf(members)).includes(user.id);
     });
     if (ding) playMsgTone();
-  }, [rows, loaded, user, rooms, rels, chars]);
+  }, [rows, loaded, user, rooms, rels, chars, members]);
 
   // 알림 — 내 앞으로 새로 쌓인 안 읽은 알림 (역극 제외). 발생 지점(같은 탭)·서버 받아 오기(syncNotifs)·다른 탭 모두 NOTIF_EVENT/storage로 온다
   const seenNotif = useRef<Set<string> | null>(null);

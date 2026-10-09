@@ -47,7 +47,7 @@ const fmtHM = (iso: string) => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
-import { useMembers } from '@/lib/members';
+import { useMembers, adminIdsOf } from '@/lib/members';
 import { pushNotif } from '@/lib/notifStore';
 
 export default function RpPage() {
@@ -62,7 +62,9 @@ export default function RpPage() {
   const msgsOf = (r: RpRoom) => messagesFor(msgRows, r.id, r.messages);
   // 참여 회원 — 기반 자관이 있으면 그 자관 캐릭터의 권한자에서 자동으로 (v2.0 사용자 확정).
   // 계산해서 쓰므로 권한이 다른 사람에게 넘어가면 그 자관 기반 역극 전체에 바로 반영된다
-  const memberIdsOf = (r: RpRoom) => rpMemberIds(r, rels, chars);
+  const pool = useMembers();
+  const adminIds = adminIdsOf(pool);   // 자관 기반 방은 운영자 자캐가 있으면 관리자도 당사자 (커플홈)
+  const memberIdsOf = (r: RpRoom) => rpMemberIds(r, rels, chars, adminIds);
   const [chars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
   const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
   const [selId, setSelId] = useState<string | null>(null);
@@ -76,7 +78,7 @@ export default function RpPage() {
     ? rooms.filter(r => memberIdsOf(r).includes(user.id))
       .sort((a, b) => rpLastDate(b, messagesFor(msgRows, b.id, b.messages))
         .localeCompare(rpLastDate(a, messagesFor(msgRows, a.id, a.messages))))
-    : []), [rooms, user, msgRows, rels, chars]);
+    : []), [rooms, user, msgRows, rels, chars, adminIds]);   // eslint-disable-line react-hooks/exhaustive-deps
   const myRooms = useMemo(() => allMine.filter(r => fStatus === 'all' || r.status === fStatus), [allMine, fStatus]);
   const sel = myRooms.find(r => r.id === selId) ?? myRooms[0];
   const cntS = (s: 'all' | 'ongoing' | 'done') =>
@@ -300,12 +302,11 @@ export default function RpPage() {
   const [nRel, setNRel] = useState('none');
   const [nAu, setNAu] = useState('base');   // 고른 자관의 AU (v2.0 사용자 요청)
   const [nMembers, setNMembers] = useState<string[]>([]);
-  const pool = useMembers();
   // 개설 모달에서 보여 줄 자동 참여자 (개설자 제외) — 권한자를 이름으로 (v2.0)
   const newRelGrantNames = (() => {
     if (nRel === 'none') return [] as string[];
     const ids = rpMemberIds(
-      { relId: nRel, createdBy: user?.id ?? '', memberIds: [] } as unknown as RpRoom, rels, chars);
+      { relId: nRel, createdBy: user?.id ?? '', memberIds: [] } as unknown as RpRoom, rels, chars, adminIds);
     return ids.filter(id => id !== user?.id)
       .map(id => pool.find(pp => pp.id === id)?.nickname ?? id);
   })();

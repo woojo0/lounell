@@ -20,6 +20,7 @@ import { putBlob } from '@/lib/blobStore';
 import { GrantsEditor } from '@/components/chars/GrantsEditor';
 import { TrpgLog, TRPG_SEED, logPath } from '@/lib/galleryStore';
 import { RpRoom, RP_SEED, rpMemberIds } from '@/lib/rpStore';
+import { useMembers, adminIdsOf } from '@/lib/members';
 import { HEADER_BLUR_DEFAULT } from '@/lib/charStore';
 import { useFonts } from '@/lib/fontStore';
 import { useMainStore } from '@/lib/mainStore';
@@ -260,6 +261,8 @@ export default function RelDetailPage() {
   const [chars, setChars, charsLoaded] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
   const [logs] = useLocalList<TrpgLog>('ohome.trpg.v1', TRPG_SEED);
   const [rooms] = useLocalList<RpRoom>('ohome.rp.v1', RP_SEED);
+  const membersAll = useMembers();
+  const adminIds = adminIdsOf(membersAll);   // 자관 기반 방은 운영자 자캐가 있으면 관리자도 당사자 (커플홈)
   const [tab, setTab] = useState<'tl' | 'qa'>('tl');
   const [auId, setAuId] = useState('base');
   const [oneMode, setOneMode] = useState<boolean | null>(null);
@@ -538,10 +541,10 @@ export default function RelDetailPage() {
   // 참여자는 역극 페이지와 같은 계산(rpMemberIds)으로 — 자관 기반 방은 저장된 memberIds에 개설자만 있어서
   // 상대 오너에게는 자기가 참여한 역극이 이 목록에 뜨지 않았다 (커플홈 작업 중 발견)
   const relRooms = useMemo(() => rooms.filter(rm => rm.relId === rel?.id && auKeyOf(rm.auId) === auId
-    && ((user && rpMemberIds(rm, rels, chars).includes(user.id)) || (rm.status === 'done' && rm.isPublic))),
+    && ((user && rpMemberIds(rm, rels, chars, adminIds).includes(user.id)) || (rm.status === 'done' && rm.isPublic))),
     // 자관 페이지의 역극 목록은 생성 순 그대로 (커플홈 사용자 확정 — 최근 발화 순은 역극 페이지에서만)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [rooms, rel, user, rels, chars, auId]);
+    [rooms, rel, user, rels, chars, auId, adminIds]);
 
   if (!loaded) return <section className="page" />;
   if (!rel || (rel.visibility === 'private' && !isAdmin) || (rel.visibility === 'member' && !user)) {

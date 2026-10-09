@@ -44,19 +44,28 @@ export interface RpRoom {
  * (방 문서를 고쳐 돌아다닐 필요가 없다 — 남의 방은 어차피 고칠 수도 없다).
  *
  * 자유 개설(자관 없음) 방은 예전처럼 저장된 memberIds를 쓴다. 개설자는 언제나 참여자.
+ *
+ * 자관 멤버에 **운영자 자캐(own)** 가 있으면 관리자(adminIds)도 당사자다 (커플홈 사용자 제보 — "회원이 만든 역극 방이
+ * 나한테는 안 보인다"): 자캐에는 grants가 없어서(권한은 상대에게 주는 것) 회원이 개설한 방의 참여자가 회원뿐이었다.
+ * 관리자가 만든 방은 개설자로 들어가 있어 티가 안 났다. adminIds는 회원 목록(useMembers → adminIdsOf)에서 넘긴다.
  */
 export function rpMemberIds(
   r: RpRoom,
   rels: { id: string; members: { charId: string }[] }[],
-  chars: { id: string; grants?: { userId: string }[] }[],
+  chars: { id: string; grants?: { userId: string }[]; own?: boolean }[],
+  adminIds: string[] = [],
 ): string[] {
   const ids = new Set<string>();
   if (r.createdBy) ids.add(r.createdBy);
   if (r.relId) {
     const rel = rels.find(x => x.id === r.relId);
+    let hasOwn = false;
     rel?.members.forEach(m => {
-      chars.find(c => c.id === m.charId)?.grants?.forEach(g => ids.add(g.userId));
+      const c = chars.find(x => x.id === m.charId);
+      if (c?.own) hasOwn = true;
+      c?.grants?.forEach(g => ids.add(g.userId));
     });
+    if (hasOwn) adminIds.forEach(id => ids.add(id));
     return [...ids];
   }
   (r.memberIds ?? []).forEach(id => ids.add(id));

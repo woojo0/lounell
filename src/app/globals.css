@@ -508,12 +508,14 @@ a{color:inherit;text-decoration:none}
 .rp-head{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:10px}
 .rp-head b{font-size:calc(14px*var(--fs,1))}
 .rp-head small{color:var(--faint);font-size:calc(10.5px*var(--fs,1));display:block}
-.rp-msgs{flex:1;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+/* 말풍선 최소 폭 (커플홈 사용자 요청 — "모바일에서 보면 말풍선이 너무 작다"): 폭은 비율(78%·72%)로 정하되
+   이 픽셀보다 좁아지면 비율을 버리고 최소 폭을, 화면이 그보다도 좁으면 100%를 쓴다 */
+.rp-msgs{flex:1;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:14px;--bub-min:300px}
 /* 역극 스크롤바 — 기본(8px)보다 얇게 */
 .rp-msgs::-webkit-scrollbar,.rp-rooms-list::-webkit-scrollbar{width:5px}
 .rp-msgs::-webkit-scrollbar-thumb,.rp-rooms-list::-webkit-scrollbar-thumb{border-width:1px}
 /* 가로 20px 축소 (v2.0 사용자 요청) — 폭 비율은 그대로 두고 실제 너비만 줄인다 */
-.msg{display:flex;gap:10px;max-width:calc(78% - 20px);--cc:93,99,109;position:relative} /* 말풍선 = 캐릭터 테마색 저알파 (6장) */
+.msg{display:flex;gap:10px;max-width:min(100%,max(var(--bub-min,300px),calc(78% - 20px)));--cc:93,99,109;position:relative} /* 말풍선 = 캐릭터 테마색 저알파 (6장) */
 .msg .face{width:38px;height:38px;border-radius:11px;flex-shrink:0;position:relative;overflow:hidden}
 .msg .who{font-size:calc(10.5px*var(--fs,1));color:rgb(var(--cc));font-weight:700;margin-bottom:3px;letter-spacing:.05em}
 .msg .bub{padding:10px 14px;border-radius:13px;border-top-left-radius:4px;font-size:calc(12.5px*var(--fs,1));line-height:1.7;
@@ -525,7 +527,7 @@ a{color:inherit;text-decoration:none}
 /* 역극 메신저 모양 (커플홈 사용자 요청) — 아이폰 문자(iMessage): 내 쪽 파란 말풍선 · 상대 회색, 꼬리는 묶음 마지막에만 */
 .rp-msgs.imsg{gap:2px;padding:14px 12px;background:var(--panel-solid)}
 .im-sys{align-self:center;text-align:center;max-width:82%;font-size:calc(11.5px*var(--fs,1));line-height:1.7;color:#8e8e93;margin:6px 0;white-space:pre-line;position:relative}
-.im-msg{display:flex;align-items:flex-end;gap:6px;max-width:72%;position:relative}
+.im-msg{display:flex;align-items:flex-end;gap:6px;max-width:min(100%,max(var(--bub-min,300px),72%));position:relative}
 .im-msg.them{align-self:flex-start;gap:14px}   /* 얼굴이 말풍선 꼬리(왼쪽 10px)에 가리지 않게 간격을 둔다 */
 .im-msg.me{align-self:flex-end;flex-direction:row-reverse}
 .im-msg.first{margin-top:8px}
@@ -636,6 +638,9 @@ a{color:inherit;text-decoration:none}
   /* 모바일 배치에선 역극 안쪽 스크롤바를 숨긴다 (사용자 요청 — 손가락으로 넘기니 보일 필요가 없다). 스크롤 자체는 그대로 */
   .rp-msgs,.rp-rooms-list{scrollbar-width:none}
   .rp-msgs::-webkit-scrollbar,.rp-rooms-list::-webkit-scrollbar{display:none;width:0}
+  /* 말풍선이 최소 폭까지 넓어지면 옆에 EDIT/DEL 메뉴 둘 자리가 없다(왼쪽 밖으로 잘린다) — 좁은 화면에선 말풍선 위 모서리에 */
+  .im-msg.me .m-act,.msg.me .m-act{left:auto;right:0;top:0;transform:translateY(-100%)}
+  .im-sys .m-act,.msg-desc .m-act{left:auto;right:0;top:0;transform:translateY(-100%)}
   /* 채팅 머리(제목·캐릭터명·진행중/RENAME/END/LOG/DELETE)는 숨긴다 (사용자 확정) — 접힘 바에 제목과 캐릭터 이름이 있다.
      방 관리 버튼은 PC에서 쓴다 */
   .rp-head{display:none}

@@ -107,6 +107,24 @@ export function BgmPlayer() {
     try { localStorage.setItem('ohome.bgm.fold', v ? '1' : '0'); } catch { /* 무시 */ }
   };
 
+  // 화면 아래에 붙는 바(모바일·dock)가 내용을 가리지 않게 — 바가 덮는 높이를 --bgm-h로 알려 주고, 페이지가 그만큼 아래 여백을 둔다
+  // (커플홈 사용자 제보: "모바일 뷰에서 BGM 재생기가 계속 아래 라인을 가려"). 떠 있는 알약 모양(PC 기본)은 0 — 전폭으로 바닥에 붙은 때만
+  useEffect(() => {
+    const el = rootRef.current;
+    const root = document.documentElement.style;
+    if (!el) { root.removeProperty('--bgm-h'); return; }
+    const set = () => {
+      const r = el.getBoundingClientRect();
+      const full = r.width >= window.innerWidth - 2 && r.bottom >= window.innerHeight - 1;
+      root.setProperty('--bgm-h', full ? `${Math.max(0, Math.round(window.innerHeight - r.top))}px` : '0px');
+    };
+    set();
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    window.addEventListener('resize', set);
+    return () => { ro.disconnect(); window.removeEventListener('resize', set); root.removeProperty('--bgm-h'); };
+  }, [settings.enabled, anyTracks, settings.dock]);
+
   // YT API 로드 + 플레이어 생성
   useEffect(() => {
     if (!settings.enabled || tracks.length === 0) return;

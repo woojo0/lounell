@@ -238,7 +238,7 @@ a{color:inherit;text-decoration:none}
 
 /* ---------- 공통 레이아웃 ---------- */
 /* 하단 여백은 BGM 미니 플레이어(약 73px)를 가리지 않는 최소치 — 과하면 불필요한 스크롤 발생 */
-.page{max-width:1180px;margin:0 auto;padding:16px 28px 80px;animation:fade .35s}
+.page{max-width:1180px;margin:0 auto;padding:16px 28px calc(80px + var(--bgm-h,0px));animation:fade .35s} /* --bgm-h: 바닥에 붙은 BGM 바가 덮는 높이 (BgmPlayer가 잰다) */
 @keyframes fade{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
 /* 자관 상세는 제자리에서 밝아지기만 (커플홈 사용자 제보) — 위의 8px 밀어올리기가 600px짜리 헤더 배경(.rel-backdrop)을
    통째로 움직여 「배경색이 아래에서 올라오는」 것처럼 보였다 */
@@ -654,14 +654,19 @@ a{color:inherit;text-decoration:none}
   .rp-layout > .tagside{display:none;order:2;align-self:stretch}
   .rp-layout.mopen .rp-rooms{display:flex}
   .rp-layout.mopen > .tagside{display:block}
-  /* 채팅창을 화면 아래까지 (v2.0 사용자 요청 — 「아래 여백 줄이고 채팅창을 더 아래로」)
-     100dvh − 위 요소들(상단바·제목·접힘 바)·BGM 바 여유. 64vh 고정은 아래가 뭉텅 남았다 */
-  .rp-chat{order:3;height:calc(100dvh - 187px - var(--top-h,58px));min-height:380px}
-  .page-rp{padding-bottom:14px}
-  /* 입력창 포커스 — 페이지 제목·접힘 바 없이 역극 영역만 (v1.9) */
+  /* 채팅창을 화면 아래까지 (v2.0 사용자 요청 — 「아래 여백 줄이고 채팅창을 더 아래로」) — 페이지를 화면 높이(100dvh − 상단바)로
+     잡고 채팅이 남는 자리를 전부 차지한다. 예전의 「100dvh − 187px」 고정 계산은 제목·접힘 바·BGM 바 높이가 글꼴 크기에 따라 달라
+     입력줄이 BGM 바에 가려졌다 (커플홈 사용자 제보: "모바일 뷰에서 BGM 재생기가 계속 아래 라인을 가려"). BGM 바가 덮는 높이(--bgm-h)만큼
+     아래 여백을 둔다. 방 목록을 펼치면(mopen) 넘치는 만큼 페이지가 스크롤된다 */
+  /* .page.page-rp — 좁은 화면의 .page{padding-bottom:90px}(아래 620px 블록, 같은 우선순위에 더 뒤)보다 세게. 아래 여백 = BGM 바 + 14px */
+  .page.page-rp{height:calc(100dvh - var(--top-h,58px));display:flex;flex-direction:column;box-sizing:border-box;padding-bottom:calc(14px + var(--bgm-h,0px))}
+  .page-rp > .page-head{flex-shrink:0}
+  .page-rp > .rp-layout{flex:1;min-height:0}
+  .rp-mfold{flex-shrink:0}
+  .rp-chat{order:3;flex:1;min-height:320px;height:auto}
+  /* 입력창 포커스 — 페이지 제목·접힘 바 없이 역극 영역만 (v1.9). 높이는 위 flex가 맡는다 (키보드가 올라오면 100dvh가 줄어 같이 줄어든다) */
   .page.rp-focus .page-head{display:none}
   .page.rp-focus .rp-mfold{display:none}
-  .page.rp-focus .rp-chat{height:80vh}
 }
 
 /* ================= 이미지 라이트박스 (클릭 확대 보기) ================= */
@@ -1151,7 +1156,7 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 .profile-center img{width:100%;height:100%;object-fit:cover}
 /* 스티키 안정성 (v1.9): 끝까지 스크롤했을 때 아트 하단 == 정보 패널 하단이 되도록
    하단 여백을 계산값으로 고정 — viewH(100vh-58) - top(10) - artH(100vh-150) = 82px */
-.page-char-detail{padding-bottom:82px}
+.page-char-detail{padding-bottom:calc(82px + var(--bgm-h,0px))}
 .profile-info{padding:24px;overflow:auto}
 /* 세리프는 **탭 제목에만** (v2.0 사용자 제보) — 예전 `.profile-info h3`는 본문(.prose)에
    직접 쓴 h3까지 잡아서, 본문 폰트를 바꿔도 h3만 세리프로 남았다 */

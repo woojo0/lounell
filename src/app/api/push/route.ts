@@ -106,5 +106,7 @@ export async function POST(req: NextRequest) {
     failed: results.filter(r => !r.ok).length,
     // 404·410 = 브라우저가 구독을 지웠다 — 보낸 쪽이 자기 것이면 목록에서 치운다
     dead: results.filter(r => r.code === 404 || r.code === 410).map(r => r.endpoint),
+    // 기기별 결과 — 정보수정의 「이 기기로 테스트」가 어느 기기가 왜 실패했는지 보여 준다
+    results,
   }, { headers: NO_STORE });
 }

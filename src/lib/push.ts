@@ -170,7 +170,15 @@ export function dropSubsCache() { subsCache = null; }
 
 /** 받는 사람들의 켜진 구독으로 푸시 — 실패해도 조용히 (푸시 때문에 글 자체가 막히면 안 된다).
  *  돌아온 결과의 죽은 구독(브라우저가 지운 것)이 내 것이면 목록에서 지운다 (남의 것은 못 지운다 — 주인이 정보수정에서) */
-export async function webPushTo(userIds: string[], payload: PushPayload): Promise<{ sent: number; dead: string[] } | null> {
+export interface PushResult {
+  sent: number;
+  dead: string[];
+  /** 기기(구독)별 결과 — code는 푸시 서비스의 응답 코드 (0 = 서버가 보내지 못함) */
+  results: { endpoint: string; ok: boolean; code: number }[];
+  /** 라우트 자체가 거부했을 때 (예: HTTP 401 = 로그인 확인 실패, 503 = 서버 키 없음) */
+  error?: string;
+}
+export async function webPushTo(userIds: string[], payload: PushPayload): Promise<PushResult | null> {
   try {
     if (typeof window === 'undefined' || !userIds.length) return null;
     const list = await allSubs();
@@ -184,17 +192,18 @@ export async function webPushTo(userIds: string[], payload: PushPayload): Promis
       { subs: targets.filter(s => !s.hide), payload: { ...payload, url, icon } },
       { subs: targets.filter(s => !!s.hide), payload: { ...hiddenPayload(payload), url, icon } },
     ].filter(g => g.subs.length);
-    const out = { sent: 0, dead: [] as string[] };
+    const out: PushResult = { sent: 0, dead: [], results: [] };
     for (const g of groups) {
       const res = await fetch('/api/push', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         body: JSON.stringify({ subs: g.subs.map(s => ({ endpoint: s.endpoint, keys: s.keys })), payload: g.payload }),
       });
-      if (!res.ok) continue;
-      const r = await res.json() as { sent?: number; dead?: string[] };
+      if (!res.ok) { out.error = `HTTP ${res.status}`; continue; }
+      const r = await res.json() as { sent?: number; dead?: string[]; results?: PushResult['results'] };
       out.sent += r.sent ?? 0;
       out.dead.push(...(r.dead ?? []));
+      out.results.push(...(r.results ?? []));
     }
     const me = currentUserId();
     const deadMine = list.filter(s => s.userId === me && (out.dead ?? []).includes(s.endpoint));

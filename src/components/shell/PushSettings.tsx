@@ -23,6 +23,7 @@ export function PushSettings() {
   const [perm, setPerm] = useState<NotificationPermission | 'unsupported' | null>(null);
   const [env, setEnv] = useState<{ kind: PushKind; label: string; ios: boolean; standalone: boolean; inApp: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [lastTest, setLastTest] = useState<string[]>([]);   // 마지막 테스트의 기기별 결과 (문제를 짚을 수 있게)
   // 내용 숨기기 — 등록된 구독에 적혀 있으면 그 값, 아직 기기가 없으면 이 브라우저에 적어 둔 값 (첫 등록 때 그대로 쓴다)
   const [hidePref, setHidePref] = useState(false);
 
@@ -97,13 +98,26 @@ export function PushSettings() {
     setSubs(subs.filter(x => x.id !== s.id)); dropSubsCache();
   };
 
+  // 테스트 — 내 모든 켜진 기기로 보내고, 기기별 결과를 아래에 적어 둔다 (어느 기기가 왜 안 되는지 바로 보이게)
   const test = async () => {
     setBusy(true);
     const r = await webPushTo([me], { title: '테스트 알림', body: '웹푸시가 동작합니다', url: '/mypage', tag: 'push-test', kind: 'test' });
     setBusy(false);
-    if (!r) toast('보내지 못했습니다 — 켜 둔 기기가 없거나 서버 키가 없습니다');
-    else if (r.sent) toast(`보냈습니다 (기기 ${r.sent}개)`);
-    else toast('보내지 못했습니다 — 기기 구독이 만료됐을 수 있습니다. 체크를 껐다 다시 켜 보세요');
+    if (!r) { setLastTest(['켜 둔 기기가 없습니다']); toast('보내지 못했습니다 — 켜 둔 기기가 없습니다'); return; }
+    const why = (code: number) =>
+      code === 404 || code === 410 ? '구독 만료 — 그 기기에서 체크를 껐다 다시 켜 주세요'
+      : code === 401 || code === 403 ? '푸시 서비스가 서명을 거부 — 서버 키를 바꿨다면 그 기기에서 체크를 껐다 다시 켜 주세요'
+      : code === 0 ? '서버가 푸시 서비스에 닿지 못함'
+      : `푸시 서비스 응답 ${code}`;
+    const lines = r.results.map(x => {
+      const s = mine.find(m => m.endpoint === x.endpoint);
+      const name = s ? `${s.label} (${KIND_NAME[s.kind]})` : '다른 기기';
+      return x.ok ? `${name}: 보냄 ✓` : `${name}: 실패 — ${why(x.code)}`;
+    });
+    if (r.error) lines.push(`서버 거부: ${r.error}${r.error.includes('401') ? ' (로그인 확인 실패 — 다시 로그인해 보세요)' : r.error.includes('503') ? ' (서버 푸시 키 없음)' : ''}`);
+    setLastTest(lines.length ? lines : ['결과 없음']);
+    if (r.sent) toast(`보냈습니다 (기기 ${r.sent}개) — 아래 결과를 확인해 주세요`);
+    else toast('보내지 못했습니다 — 아래 결과를 확인해 주세요');
   };
 
   const row = (k: PushKind) => {
@@ -178,6 +192,17 @@ export function PushSettings() {
           <div>
             <button className="btn btn-ghost" style={{ marginTop: 4 }} onClick={() => void test()}
               disabled={busy || !isOn(myKind) || !endpoint}>이 기기로 테스트</button>
+            <small className="hint" style={{ display: 'block', margin: '6px 0 0', lineHeight: 1.6 }}>
+              테스트는 내 켜진 기기 전부로 갑니다.
+              {env.ios && env.standalone
+                ? ' 아이폰은 이 앱이 열려 있는 동안에는 알림이 표시되지 않습니다 — 홈 화면으로 나가거나 화면을 잠근 뒤 PC에서 테스트해 보세요.'
+                : ''}
+            </small>
+            {lastTest.length > 0 && (
+              <div className="hint" style={{ margin: '6px 0 0', lineHeight: 1.7 }}>
+                {lastTest.map((l, i) => <div key={i}>· {l}</div>)}
+              </div>
+            )}
           </div>
         </div>
       )}

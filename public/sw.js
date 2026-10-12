@@ -15,7 +15,11 @@ self.addEventListener('push', (e) => {
     renotify: !!d.tag,
     data: { url: d.url || '/' },
   };
-  e.waitUntil(self.registration.showNotification(title, opts));
+  // 열려 있는 화면에도 알린다 — 정보수정의 「마지막 수신」 (아이폰은 앱이 열려 있으면 알림을 띄우지 않아, 왔는지 확인할 길이 이것뿐)
+  const tell = self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then((cs) => cs.forEach((c) => c.postMessage({ type: 'ohome-push', at: Date.now(), title })))
+    .catch(() => {});
+  e.waitUntil(Promise.all([self.registration.showNotification(title, opts), tell]));
 });
 
 self.addEventListener('notificationclick', (e) => {

@@ -24,6 +24,7 @@ export function PushSettings() {
   const [env, setEnv] = useState<{ kind: PushKind; label: string; ios: boolean; standalone: boolean; inApp: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
   const [lastTest, setLastTest] = useState<string[]>([]);   // 마지막 테스트의 기기별 결과 (문제를 짚을 수 있게)
+  const [lastRecv, setLastRecv] = useState<string>('');     // 이 기기의 서비스 워커가 마지막으로 받은 푸시 (화면이 열려 있을 때만 들린다)
   // 내용 숨기기 — 등록된 구독에 적혀 있으면 그 값, 아직 기기가 없으면 이 브라우저에 적어 둔 값 (첫 등록 때 그대로 쓴다)
   const [hidePref, setHidePref] = useState(false);
 
@@ -34,6 +35,13 @@ export function PushSettings() {
     setPerm(Notification.permission);
     void serverPushKey().then(setServer);
     void currentBrowserSub().then(s => setEndpoint(s?.endpoint ?? null));
+    // 서비스 워커의 수신 알림 — 아이폰은 앱이 열려 있으면 알림을 띄우지 않으므로 이 줄로 도달 여부를 본다
+    const onMsg = (ev: MessageEvent) => {
+      const d = ev.data as { type?: string; at?: number; title?: string } | null;
+      if (d?.type === 'ohome-push') setLastRecv(`${new Date(d.at ?? Date.now()).toLocaleTimeString()} — ${d.title ?? ''}`);
+    };
+    navigator.serviceWorker.addEventListener('message', onMsg);
+    return () => navigator.serviceWorker.removeEventListener('message', onMsg);
   }, []);
 
   // 서버 키가 바뀌었으면(관리자가 「새 키 만들기」) 이 기기 구독을 조용히 다시 만든다 — 권한은 이미 있으니 창은 안 뜬다.
@@ -217,7 +225,7 @@ export function PushSettings() {
             <button className="btn btn-ghost" style={{ marginTop: 4 }} onClick={() => void test()}
               disabled={busy || !isOn(myKind) || !endpoint}>이 기기로 테스트</button>
             <small className="hint" style={{ display: 'block', margin: '6px 0 0', lineHeight: 1.6 }}>
-              테스트는 내 켜진 기기 전부로 갑니다.
+              테스트는 내 켜진 기기 전부로 갑니다.{lastRecv ? ` 이 기기 마지막 수신: ${lastRecv}` : ''}
               {env.ios && env.standalone
                 ? ' 아이폰은 이 앱이 열려 있는 동안에는 알림이 표시되지 않습니다 — 홈 화면으로 나가거나 화면을 잠근 뒤 PC에서 테스트해 보세요.'
                 : ''}

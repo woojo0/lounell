@@ -9,7 +9,7 @@ self.addEventListener('push', (e) => {
   const title = d.title || 'O.HOME';
   const opts = {
     body: d.body || '',
-    icon: '/icon-192.png',
+    icon: d.icon || '/icon-192.png',   // 보내는 쪽이 홈의 탭 아이콘(파비콘)을 실어 보낸다 — 없으면 기본 아이콘
     badge: '/icon-192.png',
     tag: d.tag || undefined,          // 같은 방·같은 글의 알림은 하나로 겹친다
     renotify: !!d.tag,

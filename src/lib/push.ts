@@ -13,6 +13,7 @@
 import { backend, isServerMode } from './backend';
 import { loadListOnce, saveListDiff } from './postStore';
 import { currentUserId } from './currentUser';
+import { getSetting } from './settingStore';
 
 export const PUSH_KEY = 'ohome.pushsubs.v1';
 export type PushKind = 'pc' | 'mobile';
@@ -24,6 +25,8 @@ export interface PushSub {
   endpoint: string;
   keys: { p256dh: string; auth: string };
   on: boolean;                         // 체크 상태 — 꺼져 있으면 서버가 건너뛴다
+  /** 알림에 내용을 숨긴다 (잠금 화면 등에 글 내용이 보이지 않게) — 종류만 적은 일반 문구로 보낸다. 받는 사람이 정하고 자기 구독 전부에 적는다 */
+  hide?: boolean;
   createdAt: string;
   authorId: string;                    // = userId (서버 규칙: 주인만 고치고 지운다)
   visibility: 'member';                // 회원끼리 읽힌다 (보내는 쪽이 받는 사람 구독을 읽어야 한다)
@@ -129,7 +132,31 @@ export function subJson(s: PushSubscription): { endpoint: string; keys: { p256dh
   return { endpoint: j.endpoint, keys: { p256dh: j.keys.p256dh, auth: j.keys.auth } };
 }
 
-export interface PushPayload { title: string; body?: string; url: string; tag?: string }
+export interface PushPayload {
+  title: string; body?: string; url: string; tag?: string;
+  /** 알림 아이콘 주소 — 보낼 때 환경설정의 탭 아이콘(파비콘)으로 채운다 (커플홈 사용자 요청: PC 알림 아이콘이 예쁘지 않았다) */
+  icon?: string;
+  /** 알림 종류 (rp·comment·guest·thread·memo·diary) — 내용을 숨길 때 종류만 적은 문구를 만드는 데 쓴다 */
+  kind?: string;
+}
+
+/** 이 기기에서 「내용 숨기기」를 정해 둔 값 — 아직 등록한 기기가 없을 때 첫 등록에 그대로 쓴다 */
+export const PUSH_HIDE_KEY = 'ohome.pushhide.v1';
+
+const HIDE_TITLE: Record<string, string> = {
+  rp: '역극 새 메시지', comment: '새 댓글', guest: '방명록 새 글', thread: '타래 새 글', memo: '새 메모', diary: '새 다이어리',
+};
+/** 내용을 숨긴 문구 — 종류와 「홈에서 확인」만 (아이콘은 그대로) */
+export function hiddenPayload(p: PushPayload): PushPayload {
+  return { title: HIDE_TITLE[p.kind ?? ''] ?? '새 알림', body: '내용은 홈에서 확인해 주세요', url: p.url, tag: p.tag, kind: p.kind, icon: p.icon };
+}
+
+/** 환경설정의 탭 아이콘(파비콘) — 저장소 주소일 때만 (브라우저 저장 모드의 파일 id는 서비스 워커가 읽을 수 없다) */
+function siteIcon(): string | undefined {
+  const site = getSetting<{ favicon?: string }>('ohome.site.v1', {});
+  const f = (site?.favicon ?? '').trim();
+  return f.startsWith('https://') || f.startsWith('http://') ? f : undefined;
+}
 
 // 한 사건에 받는 사람이 여럿이면 구독 목록을 여러 번 읽게 된다 — 잠깐 캐시
 let subsCache: { at: number; list: PushSub[] } | null = null;
@@ -150,16 +177,25 @@ export async function webPushTo(userIds: string[], payload: PushPayload): Promis
     const targets = list.filter(s => s.on && userIds.includes(s.userId) && !!s.endpoint && !!s.keys?.p256dh && !!s.keys?.auth);
     if (!targets.length) return null;
     const token = isServerMode() ? await backend()?.authToken() : null;
-    const res = await fetch('/api/push', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({
-        subs: targets.map(s => ({ endpoint: s.endpoint, keys: s.keys })),
-        payload: { ...payload, url: new URL(payload.url, location.origin).href },
-      }),
-    });
-    if (!res.ok) return null;
-    const out = await res.json() as { sent: number; dead: string[] };
+    const url = new URL(payload.url, location.origin).href;
+    const icon = payload.icon ?? siteIcon();
+    // 내용을 숨기기로 한 구독과 그대로 받는 구독을 나눠 두 번 보낸다 (라우트는 한 번에 한 문구)
+    const groups = [
+      { subs: targets.filter(s => !s.hide), payload: { ...payload, url, icon } },
+      { subs: targets.filter(s => !!s.hide), payload: { ...hiddenPayload(payload), url, icon } },
+    ].filter(g => g.subs.length);
+    const out = { sent: 0, dead: [] as string[] };
+    for (const g of groups) {
+      const res = await fetch('/api/push', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ subs: g.subs.map(s => ({ endpoint: s.endpoint, keys: s.keys })), payload: g.payload }),
+      });
+      if (!res.ok) continue;
+      const r = await res.json() as { sent?: number; dead?: string[] };
+      out.sent += r.sent ?? 0;
+      out.dead.push(...(r.dead ?? []));
+    }
     const me = currentUserId();
     const deadMine = list.filter(s => s.userId === me && (out.dead ?? []).includes(s.endpoint));
     if (deadMine.length) {

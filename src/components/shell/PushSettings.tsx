@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/ui/Toast';
 import { KCheck, KInput } from '@/components/ui/Kit';
 import {
-  PUSH_KEY, PushSub, PushKind, pushSupported, isIos, isStandalone, deviceKind, deviceLabel, inAppBrowser,
+  PUSH_KEY, PUSH_HIDE_KEY, PushSub, PushKind, pushSupported, isIos, isStandalone, deviceKind, deviceLabel, inAppBrowser,
   serverPushKey, ServerPushKey, currentBrowserSub, subscribeBrowser, unsubscribeBrowser, subJson, webPushTo, dropSubsCache,
 } from '@/lib/push';
 
@@ -23,8 +23,11 @@ export function PushSettings() {
   const [perm, setPerm] = useState<NotificationPermission | 'unsupported' | null>(null);
   const [env, setEnv] = useState<{ kind: PushKind; label: string; ios: boolean; standalone: boolean; inApp: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
+  // 내용 숨기기 — 등록된 구독에 적혀 있으면 그 값, 아직 기기가 없으면 이 브라우저에 적어 둔 값 (첫 등록 때 그대로 쓴다)
+  const [hidePref, setHidePref] = useState(false);
 
   useEffect(() => {
+    try { setHidePref(localStorage.getItem(PUSH_HIDE_KEY) === '1'); } catch { /* 무시 */ }
     setEnv({ kind: deviceKind(), label: deviceLabel(), ios: isIos(), standalone: isStandalone(), inApp: inAppBrowser() });
     if (!pushSupported()) { setPerm('unsupported'); return; }
     setPerm(Notification.permission);
@@ -38,6 +41,12 @@ export function PushSettings() {
   const ofKind = (k: PushKind) => mine.filter(s => s.kind === k);
   const isOn = (k: PushKind) => ofKind(k).some(s => s.on);
   const myKind = env.kind;
+  const hideOn = mine.length ? mine.some(s => s.hide) : hidePref;
+  const setHide = (v: boolean) => {
+    setHidePref(v);
+    try { localStorage.setItem(PUSH_HIDE_KEY, v ? '1' : '0'); } catch { /* 무시 */ }
+    if (mine.length) { setSubs(subs.map(s => (s.userId === me ? { ...s, hide: v } : s))); dropSubsCache(); }
+  };
   const supported = perm !== 'unsupported';
   const iosBlocked = env.ios && !env.standalone;
   const serverOff = server !== null && !server.enabled;
@@ -68,7 +77,7 @@ export function PushSettings() {
       const next = existing
         ? base.map(s => (s.id === existing.id ? { ...s, on: true, keys: j.keys, kind: k, label } : s))
         : [...base, {
-            id: newId(), userId: me, kind: k, label, endpoint: j.endpoint, keys: j.keys, on: true,
+            id: newId(), userId: me, kind: k, label, endpoint: j.endpoint, keys: j.keys, on: true, hide: hideOn,
             createdAt: new Date().toISOString(), authorId: me, visibility: 'member' as const,
           }];
       setSubs(next); dropSubsCache();
@@ -90,7 +99,7 @@ export function PushSettings() {
 
   const test = async () => {
     setBusy(true);
-    const r = await webPushTo([me], { title: '테스트 알림', body: '웹푸시가 동작합니다', url: '/mypage', tag: 'push-test' });
+    const r = await webPushTo([me], { title: '테스트 알림', body: '웹푸시가 동작합니다', url: '/mypage', tag: 'push-test', kind: 'test' });
     setBusy(false);
     if (!r) toast('보내지 못했습니다 — 켜 둔 기기가 없거나 서버 키가 없습니다');
     else if (r.sent) toast(`보냈습니다 (기기 ${r.sent}개)`);
@@ -123,6 +132,11 @@ export function PushSettings() {
       <div style={{ display: 'grid', gap: 10 }}>
         {row('pc')}
         {row('mobile')}
+        {/* 내용 숨기기 (커플홈 사용자 요청) — 잠금 화면 등에 글 내용이 보이지 않게, 종류만 적은 문구로 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 4 }}>
+          <KCheck label="알림에 내용 숨기기" checked={hideOn} disabled={busy} onChange={v => setHide(v)} />
+          <small className="hint" style={{ margin: 0 }}>글 내용 대신 「역극 새 메시지 · 내용은 홈에서 확인해 주세요」처럼 종류만 표시</small>
+        </div>
       </div>
       {/* 아이폰·아이패드의 브라우저 탭에는 푸시 API 자체가 없다(사파리든 크롬이든) — 홈 화면에 추가한 웹앱에서만 생긴다 (iOS 16.4+).
           그래서 「지원하지 않는다」가 아니라 설치 안내를 보여 준다 (커플홈 사용자 제보: "사파리도 그러네 아이폰이야") */}

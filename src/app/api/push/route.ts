@@ -85,6 +85,8 @@ export async function POST(req: NextRequest) {
     body: String(p.body ?? '').slice(0, 400),
     url: String(p.url ?? '/').slice(0, 500),
     ...(p.tag ? { tag: String(p.tag).slice(0, 80) } : {}),
+    // 알림 아이콘 — 홈의 탭 아이콘(저장소의 https 주소만)
+    ...(typeof p.icon === 'string' && p.icon.startsWith('https://') && p.icon.length <= 500 ? { icon: p.icon } : {}),
   });
 
   // VAPID 연락처(subject) — 이 홈의 주소. 푸시 서비스가 문제가 있을 때 연락할 곳으로 요구하는 값

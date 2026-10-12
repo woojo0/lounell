@@ -3,6 +3,7 @@
 // 나머지 카테고리는 해당 기능 마일스톤에서 함께 구현.
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth, loadInviteCode, saveInviteCode } from '@/lib/auth';
+import { PushAdminRow } from '@/components/shell/PushSettings';
 import { useMembers } from '@/lib/members';
 import { useTheme } from '@/lib/ThemeProvider';
 import { ThemeVars } from '@/lib/theme';
@@ -1168,6 +1169,9 @@ function MemberPane() {
           「보안 규칙」에서 다시 적용해 주세요 — Firebase는 Firestore 규칙 다시 게시, Supabase는 설치 SQL 다시 실행.
         </div>
       )}
+
+      {/* 웹푸시 서버 키 (커플홈) — 회원이 정보수정에서 켤 수 있으려면 관리자가 한 번 등록해야 한다 */}
+      <PushAdminRow />
 
       <h3 style={{ marginTop: 26 }}>회원 목록</h3>
       <div className="d">기본 계정(관리자·지인회원)은 삭제할 수 없습니다 — 태그로 그룹화</div>

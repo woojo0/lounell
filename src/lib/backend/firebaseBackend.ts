@@ -238,6 +238,12 @@ export async function createFirebaseBackend(cfg: FirebaseCfg): Promise<Backend> 
 
     async signOut() { await authMod.signOut(auth); },
 
+    async authToken() {
+      const u = auth.currentUser;
+      if (!u) return null;
+      try { return await u.getIdToken(); } catch { return null; }
+    },
+
     async resetPassword(email) {
       try {
         await authMod.sendPasswordResetEmail(auth, email);

@@ -11,6 +11,8 @@ rules_version = '2';
 //   profiles/{uid}        { nickname, avatarUrl, avatarColor }
 //   settings/{key}        { value }           ← 테마·메뉴·폰트·메인 위젯 등
 //   <콘텐츠>/{id}          { data, authorId, visibility, sort }
+//   push_subs/{id}        ← 웹푸시 기기 구독 (콘텐츠 규칙 그대로 — 주인은 그 회원, member 공개라 회원끼리 읽힌다.
+//                            구독만으로는 아무도 못 보낸다: 서버의 개인키로 서명해야 푸시 서비스가 받는다)
 //
 // 회원 = 로그인 계정 + profiles 문서 (보안 제보).
 //   Firebase Authentication 계정은 공개 apiKey만으로 누구나 만들 수 있다 — 가입 화면을 거치지 않고 REST API로.
@@ -69,7 +71,7 @@ service cloud.firestore {
         'posts', 'guestbook', 'characters', 'relations', 'gallery', 'roadview',
         'trpg_logs', 'trpg_log_bodies', 'trpg_chars', 'dotori', 'playlog', 'rp_rooms', 'threads',
         'diary', 'memos', 'commissions', 'applicants', 'moods', 'comments', 'qa_answers', 'rp_messages',
-        'notifications', 'thread_posts', 'videos', 'rp_typing'
+        'notifications', 'thread_posts', 'videos', 'rp_typing', 'push_subs'
       ];
     }
 

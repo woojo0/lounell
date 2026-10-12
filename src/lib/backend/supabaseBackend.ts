@@ -103,6 +103,11 @@ export async function createSupabaseBackend(
 
     async signOut() { await sb.auth.signOut(); },
 
+    async authToken() {
+      const { data } = await sb.auth.getSession();
+      return data.session?.access_token ?? null;
+    },
+
     async resetPassword(email) {
       const { error } = await sb.auth.resetPasswordForEmail(email);
       return error ? { ok: false, error: error.message } : { ok: true };

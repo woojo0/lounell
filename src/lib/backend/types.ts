@@ -54,6 +54,8 @@ export interface Backend {
   signUp(id: string, password: string, nickname: string, invite?: string): Promise<{ ok: boolean; error?: string }>;
   signOut(): Promise<void>;
   resetPassword(email: string): Promise<{ ok: boolean; error?: string }>;
+  /** 지금 로그인한 계정의 토큰 — /api/push 라우트가 「이 홈의 로그인 계정」인지 확인하는 데 쓴다 (커플홈 웹푸시) */
+  authToken(): Promise<string | null>;
   /** 내 정보 수정 — 닉네임·프로필 사진·색, 그리고 비밀번호(현재 비밀번호 확인 뒤 새 비밀번호).
    *  비밀번호 항목은 여태 타입에 없어 서버 모드에서 **조용히 무시되고 「변경되었습니다」만 떴다** (커플홈 사용자 제보 — "비밀번호가 변경이 안 된다") */
   updateProfile(patch: {
@@ -143,6 +145,8 @@ export const COLLECTION_OF: Record<string, string> = {
   // 알림 — 기기 보관이던 것을 서버로 (v2.0 포크 제보 「알림이 안 와요」).
   // 행 주인(authorId)을 받는 사람으로 적어, 받는 사람 계정이 어느 기기에서나 받아 간다
   'ohome.notif.v1': 'notifications',
+  // 웹푸시 기기 구독 (커플홈) — 회원마다 기기별 한 문서, 공개범위 member (보내는 쪽이 받는 사람 구독을 읽어야 한다)
+  'ohome.pushsubs.v1': 'push_subs',
 };
 
 export const CONTENT_COLLECTIONS = Object.values(COLLECTION_OF);

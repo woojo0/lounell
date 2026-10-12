@@ -108,7 +108,17 @@ export function inAppBrowser(): boolean {
   return /KAKAOTALK|Discord|Instagram|FBAN|FBAV|FB_IAB|NAVER\(inapp|Line\/|; wv\)|Twitter|DaumApps/i.test(navigator.userAgent);
 }
 
-/** 이 기기 구독 만들기 — 권한 창이 뜬다. 이미 있으면 그대로.
+/** 이 구독이 지금 서버 공개키로 만든 것인지 — 서버 키를 새로 만들면 옛 구독은 푸시 서비스가 서명을 거부한다(401·403) */
+export function subKeyMatches(s: PushSubscription, publicKey: string): boolean {
+  const k = s.options?.applicationServerKey;
+  if (!k) return true;   // 알 수 없으면 그대로 둔다
+  let bin = '';
+  new Uint8Array(k).forEach(x => { bin += String.fromCharCode(x); });
+  const b64u = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return b64u === publicKey.replace(/=+$/, '');
+}
+
+/** 이 기기 구독 만들기 — 권한 창이 뜬다. 이미 있으면 그대로 (서버 키가 바뀐 옛 구독이면 지우고 새로).
  *  권한은 **먼저** 묻는다 — 서비스 워커 설치를 기다린 뒤에 물으면 모바일 크롬에서 체크(사용자 동작)로부터 시간이 지나
  *  권한 창 대신 조용한 거부가 나올 수 있다 */
 export async function subscribeBrowser(publicKey: string): Promise<PushSubscription> {
@@ -117,7 +127,10 @@ export async function subscribeBrowser(publicKey: string): Promise<PushSubscript
   const reg = await navigator.serviceWorker.register('/sw.js');
   await navigator.serviceWorker.ready;
   const existing = await reg.pushManager.getSubscription();
-  if (existing) return existing;
+  if (existing) {
+    if (subKeyMatches(existing, publicKey)) return existing;
+    await existing.unsubscribe().catch(() => undefined);
+  }
   return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toKey(publicKey) });
 }
 

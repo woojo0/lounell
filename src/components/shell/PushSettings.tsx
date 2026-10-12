@@ -1,14 +1,14 @@
 'use client';
 // 웹푸시 설정 (커플홈 사용자 요청) — 정보수정의 「WEB PUSH」(PC·모바일 체크, 처음엔 둘 다 해제)와
 // 환경설정 회원/보안의 「웹푸시」(관리자 — 서버 키 만들기). 동작 원리는 lib/push.ts 머리말.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocalList, newId } from '@/lib/postStore';
 import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/ui/Toast';
 import { KCheck, KInput } from '@/components/ui/Kit';
 import {
   PUSH_KEY, PUSH_HIDE_KEY, PushSub, PushKind, pushSupported, isIos, isStandalone, deviceKind, deviceLabel, inAppBrowser,
-  serverPushKey, ServerPushKey, currentBrowserSub, subscribeBrowser, unsubscribeBrowser, subJson, webPushTo, dropSubsCache,
+  serverPushKey, ServerPushKey, currentBrowserSub, subscribeBrowser, unsubscribeBrowser, subJson, subKeyMatches, webPushTo, dropSubsCache,
 } from '@/lib/push';
 
 const KIND_NAME: Record<PushKind, string> = { pc: 'PC', mobile: '모바일' };
@@ -35,6 +35,30 @@ export function PushSettings() {
     void serverPushKey().then(setServer);
     void currentBrowserSub().then(s => setEndpoint(s?.endpoint ?? null));
   }, []);
+
+  // 서버 키가 바뀌었으면(관리자가 「새 키 만들기」) 이 기기 구독을 조용히 다시 만든다 — 권한은 이미 있으니 창은 안 뜬다.
+  // 옛 구독으로는 푸시 서비스가 서명을 거부해 "원래는 오다가 갑자기 안 오는" 상태가 된다 (커플홈 사용자 제보)
+  const renewing = useRef(false);
+  useEffect(() => {
+    if (!user || !server?.publicKey || !loaded || !endpoint || renewing.current) return;
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const pub = server.publicKey;
+    void (async () => {
+      const s = await currentBrowserSub();
+      if (!s || subKeyMatches(s, pub)) return;
+      renewing.current = true;
+      try {
+        const fresh = await subscribeBrowser(pub);
+        const j = subJson(fresh);
+        if (!j) return;
+        const old = subs.find(x => x.userId === user.id && x.endpoint === endpoint);
+        setEndpoint(j.endpoint);
+        if (old) { setSubs(subs.map(x => (x.id === old.id ? { ...x, endpoint: j.endpoint, keys: j.keys } : x))); dropSubsCache(); }
+        toast('서버 푸시 키가 바뀌어 이 기기를 다시 등록했습니다');
+      } catch { /* 다음에 다시 */ } finally { renewing.current = false; }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, server, loaded, endpoint]);
 
   if (!user || !env) return null;
   const me = user.id;
@@ -256,7 +280,8 @@ export function PushAdminRow() {
           <div className="d" style={{ marginBottom: 0, lineHeight: 1.7 }}>
             ① 아래 개인키를 복사 → Vercel → 프로젝트 → Settings → Environment Variables → 이름 <code>PUSH_VAPID_PRIVATE_KEY</code>, 값에 붙여넣고 Save<br />
             ② Deployments → 최신 배포의 ⋯ → Redeploy (환경변수는 다시 배포해야 적용됩니다)<br />
-            ③ 다시 이 화면을 열면 「등록됨」으로 바뀝니다. 키는 지금만 보입니다 — 잃어버리면 새로 만들어 바꿔 넣으면 되고, 회원들은 다시 체크하면 됩니다
+            ③ 다시 이 화면을 열면 「등록됨」으로 바뀝니다. 키는 지금만 보입니다 — 잃어버리면 새로 만들어 바꿔 넣으면 됩니다.
+            키를 바꾸면 이미 등록된 기기는 그 기기에서 사이트(정보수정)를 다음에 열 때 자동으로 다시 등록됩니다 — 그 전까지는 그 기기로 푸시가 가지 않습니다
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
             <KInput readOnly value={gen.priv} style={{ flex: 1, minWidth: 260, fontFamily: 'monospace' }} onFocus={e => e.currentTarget.select()} />

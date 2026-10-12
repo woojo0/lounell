@@ -82,7 +82,9 @@ export default function TrpgDetailPage() {
   useEffect(() => { if (found) lastIdRef.current = found.id; }, [found]);
   const id = l?.id ?? key;   // 아래는 전부 진짜 id로 (본문 문서·저장·비밀번호 열람 기억)
   // 본문은 **이 로그 한 건만** 읽고 쓴다 (커플홈 사용자 제보 — 전체 본문을 받느라 느렸다). 권한이 없으면 애초에 안 온다 (undefined)
-  const [bd, saveBody, removeBody] = useOneDoc<TrpgLogBody>('ohome.trpgbody.v1', l ? l.id : undefined);
+  // 본문은 목록을 기다리지 않고 바로 받는다 — 주소가 id면 그대로 맞고, 별명(slug)이면 한 번 빗나간 뒤 목록이 오면 id로 다시 받는다
+  // (커플홈 사용자 제보 "로그 로딩이 여전히 느리다": 목록 → 본문 순서로 기다리던 것을 동시에)
+  const [bd, saveBody, removeBody] = useOneDoc<TrpgLogBody>('ohome.trpgbody.v1', l ? l.id : key);
   /* 이 글이 속한 곳이 비공개면 주소로 들어와도 열리지 않게 (v2.0 사용자 요청).
      글 주소에는 섹션이 없어 MenuGuard가 못 막는다 — 글을 읽어 소속을 알아낸 여기서 판정한다.
      **다른 early return보다 먼저 불러야 한다**(훅이므로 렌더마다 개수가 같아야 한다) */

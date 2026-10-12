@@ -999,7 +999,7 @@ body.edit-on .main-grid{grid-template-columns:230px 1fr 260px}
 /* 모바일 제외 위젯 (v1.9 — 환경설정 토글은 모바일 표시만 제어, PC에는 그대로) */
 @media (max-width:620px){.wgt.wgt-hide-m{display:none !important}}
 .menu-list a{display:block;padding:10px 12px;font-size:calc(13px*var(--fs,1));color:var(--ink);border-radius:8px;cursor:var(--cur-pointer,pointer);transition:.15s}
-.menu-list a:hover{background:#eef0f2}
+.menu-list a:hover{background:var(--dd-hv)} /* 모바일 메뉴 호버도 드롭다운 호버색 (커플홈 사용자 요청) */
 .menu-list a small{color:var(--faint);float:right;font-size:calc(10px*var(--fs,1));margin-top:2px}
 .menu-list .mgrp > a::after{content:"▾";float:right;font-size:calc(9px*var(--fs,1));color:var(--faint);margin-top:3px;transition:.2s}
 .menu-list .mgrp.open > a::after{transform:rotate(180deg)}
@@ -1927,7 +1927,7 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 /* 우측 설정 패널 크기 통일 — 내용이 길어지면 내부 스크롤 없이 아래로 늘어남 (v1.9) */
 .settings-layout > .panel:not(.set-nav){min-height:calc(100vh - 250px);width:100%;box-sizing:border-box}
 .set-nav button{display:block;width:100%;text-align:left;padding:10px 13px;font-size:calc(12.5px*var(--fs,1));border-radius:8px;color:var(--sub);transition:.14s}
-.set-nav button:hover{background:#eef0f2;color:var(--ink)}
+.set-nav button:hover{background:var(--dd-hv);color:var(--ink)} /* 호버 배경 = 하위메뉴 드롭다운 호버색 (커플홈 사용자 요청: 같은 디자인끼리 같은 색) */
 .set-nav button.on{background:var(--ink);color:#fff}
 .set-sec{margin-bottom:26px}
 .set-sec h3{font-size:calc(13px*var(--fs,1));letter-spacing:.08em;margin-bottom:4px;color:var(--ink)}

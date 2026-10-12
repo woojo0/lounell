@@ -7,7 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { useToast } from '@/components/ui/Toast';
 import { KCheck, KInput } from '@/components/ui/Kit';
 import {
-  PUSH_KEY, PushSub, PushKind, pushSupported, isIos, isStandalone, deviceKind, deviceLabel,
+  PUSH_KEY, PushSub, PushKind, pushSupported, isIos, isStandalone, deviceKind, deviceLabel, inAppBrowser,
   serverPushKey, ServerPushKey, currentBrowserSub, subscribeBrowser, unsubscribeBrowser, subJson, webPushTo, dropSubsCache,
 } from '@/lib/push';
 
@@ -21,11 +21,11 @@ export function PushSettings() {
   const [server, setServer] = useState<ServerPushKey | null>(null);
   const [endpoint, setEndpoint] = useState<string | null>(null);   // 이 기기의 브라우저 구독
   const [perm, setPerm] = useState<NotificationPermission | 'unsupported' | null>(null);
-  const [env, setEnv] = useState<{ kind: PushKind; label: string; ios: boolean; standalone: boolean } | null>(null);
+  const [env, setEnv] = useState<{ kind: PushKind; label: string; ios: boolean; standalone: boolean; inApp: boolean } | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    setEnv({ kind: deviceKind(), label: deviceLabel(), ios: isIos(), standalone: isStandalone() });
+    setEnv({ kind: deviceKind(), label: deviceLabel(), ios: isIos(), standalone: isStandalone(), inApp: inAppBrowser() });
     if (!pushSupported()) { setPerm('unsupported'); return; }
     setPerm(Notification.permission);
     void serverPushKey().then(setServer);
@@ -52,7 +52,7 @@ export function PushSettings() {
       setSubs(flip(subs, true)); dropSubsCache(); return;
     }
     // 이 기기 — 구독을 만든다 (권한 창)
-    if (!supported) { toast('이 브라우저는 웹푸시를 지원하지 않습니다'); return; }
+    if (!supported) { toast(env.ios ? '아이폰은 「홈 화면에 추가」로 설치한 아이콘으로 열어야 됩니다' : '이 브라우저는 웹푸시를 지원하지 않습니다'); return; }
     if (iosBlocked) { toast('아이폰·아이패드는 「홈 화면에 추가」로 설치한 뒤 그 아이콘으로 열어야 됩니다'); return; }
     if (!server?.enabled || !server.publicKey) { toast('서버에 푸시 키가 아직 없습니다 — 관리자가 환경설정 → 회원/보안 → 웹푸시에서 등록해야 합니다'); return; }
     setBusy(true);
@@ -124,7 +124,17 @@ export function PushSettings() {
         {row('pc')}
         {row('mobile')}
       </div>
-      {!supported && <p className="hint" style={{ margin: '10px 0 0' }}>이 브라우저는 웹푸시를 지원하지 않습니다.</p>}
+      {/* 아이폰·아이패드의 브라우저 탭에는 푸시 API 자체가 없다(사파리든 크롬이든) — 홈 화면에 추가한 웹앱에서만 생긴다 (iOS 16.4+).
+          그래서 「지원하지 않는다」가 아니라 설치 안내를 보여 준다 (커플홈 사용자 제보: "사파리도 그러네 아이폰이야") */}
+      {!supported && (
+        <p className="hint" style={{ margin: '10px 0 0', lineHeight: 1.6 }}>
+          {env.ios
+            ? '아이폰·아이패드는 사파리·크롬 탭에서는 웹푸시가 안 됩니다 — 사파리 공유 버튼(□↑) → 「홈 화면에 추가」로 설치한 뒤, 홈 화면의 그 아이콘으로 열어 로그인하고 여기서 체크해 주세요 (iOS 16.4 이상).'
+            : env.inApp
+              ? '앱 안의 브라우저(카카오톡·디스코드 등 링크 화면)에서는 웹푸시가 안 됩니다 — 오른쪽 위 ⋯ 메뉴 → 「다른 브라우저로 열기」로 크롬에서 열어 체크해 주세요.'
+              : '이 브라우저는 웹푸시를 지원하지 않습니다 — 안드로이드는 크롬·삼성 인터넷·웨일, 아이폰은 홈 화면에 추가한 웹앱에서 됩니다.'}
+        </p>
+      )}
       {supported && iosBlocked && (
         <p className="hint" style={{ margin: '10px 0 0', lineHeight: 1.6 }}>
           아이폰·아이패드는 사파리 공유 버튼 → 「홈 화면에 추가」로 설치한 뒤, 그 아이콘으로 열어서 체크해야 받을 수 있습니다.

@@ -98,12 +98,21 @@ export async function currentBrowserSub(): Promise<PushSubscription | null> {
   } catch { return null; }
 }
 
-/** 이 기기 구독 만들기 — 권한 창이 뜬다. 이미 있으면 그대로 */
+/** 앱 안에 든 브라우저(카카오톡·디스코드·인스타그램·네이버·라인 등의 링크 화면) — 푸시를 지원하지 않는다.
+ *  모바일에서 "지원하지 않는다"가 뜨는 가장 흔한 이유 → 진짜 크롬(사파리)으로 열어야 한다 */
+export function inAppBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  return /KAKAOTALK|Discord|Instagram|FBAN|FBAV|FB_IAB|NAVER\(inapp|Line\/|; wv\)|Twitter|DaumApps/i.test(navigator.userAgent);
+}
+
+/** 이 기기 구독 만들기 — 권한 창이 뜬다. 이미 있으면 그대로.
+ *  권한은 **먼저** 묻는다 — 서비스 워커 설치를 기다린 뒤에 물으면 모바일 크롬에서 체크(사용자 동작)로부터 시간이 지나
+ *  권한 창 대신 조용한 거부가 나올 수 있다 */
 export async function subscribeBrowser(publicKey: string): Promise<PushSubscription> {
-  const reg = await navigator.serviceWorker.register('/sw.js');
-  await navigator.serviceWorker.ready;
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') throw new Error('permission-' + perm);
+  const reg = await navigator.serviceWorker.register('/sw.js');
+  await navigator.serviceWorker.ready;
   const existing = await reg.pushManager.getSubscription();
   if (existing) return existing;
   return reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: toKey(publicKey) });

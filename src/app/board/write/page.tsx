@@ -14,11 +14,7 @@ import { ConfirmModal } from '@/components/ui/Modal';
 import { RichEditor } from '@/components/ui/RichEditor';
 import { useToast } from '@/components/ui/Toast';
 import { PageTitle, EditableDesc } from '@/components/ui/PageText';
-
-/** 에디터가 다루지 못해 정리될 만한 태그·속성이 있는가 — 전환 경고 판단 (인트로와 같은 기준) */
-const hasRichHtml = (html: string) =>
-  /<(table|thead|tbody|tr|td|th|div|span|section|article|video|audio|details|summary|font|center)\b/i.test(html)
-  || /\s(style|class|id)\s*=/i.test(html);
+import { hasRichHtml, postAuthoredMode } from '@/lib/postStore';
 
 function WriteInner() {
   const router = useRouter();
@@ -76,7 +72,7 @@ function WriteInner() {
     setTitle(p.title); setBody(p.body);
     // 에디터로 쓴 글은 에디터로 다시 연다 — 예전에는 무조건 HTML 소스가 떠서
     // 에디터로 쓴 글을 수정하면 갑자기 태그가 보였다 (authored 없는 옛 글은 지금까지대로 HTML)
-    setWriteMode(p.mode === 'md' ? 'md' : (p.authored === 'editor' ? 'editor' : 'html'));
+    setWriteMode(postAuthoredMode(p));   // authored가 없는 옛 글도 에디터가 다룰 수 있는 글이면 에디터로 (사용자 제보: 에디터로 쓴 글이 HTML로 분류됨)
     setCategory(p.category);
     setSecret(p.secret); setNotice(p.notice);
     setFoldType(p.fold?.type ?? 'none'); setFoldLabel(p.fold?.label ?? '');
@@ -128,6 +124,7 @@ function WriteInner() {
     const p: Post = {
       id: newId(), title: title.trim(), body,
       mode: writeMode === 'md' ? 'md' : 'html', category,
+      authored: writeMode === 'editor' ? 'editor' : undefined,   // 새 글에도 적는다 — 빠져 있어서 에디터 글이 HTML로 분류됐다 (사용자 제보)
       author: user.nickname, authorId: user.id, date: new Date().toISOString(),
       secret, notice: isAdmin && notice,
       tags: parseTags(tagsText),

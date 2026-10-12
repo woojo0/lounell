@@ -11,6 +11,7 @@ import {
 } from '@/lib/postStore';
 import { useBoards, boardHref, MAIN_BOARD_ID, BoardPerm } from '@/lib/boardStore';
 import { renderBody } from '@/lib/sanitize';
+import { postAuthoredMode } from '@/lib/postStore';
 import { KInput } from '@/components/ui/Kit';
 import { Modal, ConfirmModal } from '@/components/ui/Modal';
 import { GuestIdBar } from '@/components/ui/GuestId';
@@ -168,7 +169,7 @@ export default function BoardDetailPage() {
           {post.secret && '🔒 '}{post.title}
         </h2>
         <p style={{ fontSize: 11, color: 'var(--faint)', marginBottom: 18 }}>
-          {post.author} · {fmtDate(post.date)} · {post.mode.toUpperCase()}
+          {post.author} · {fmtDate(post.date)} · {postAuthoredMode(post) === 'editor' ? 'EDITOR' : post.mode.toUpperCase()}
           {/* 태그 (v2.0 사용자 요청) — 목록과 같은 표기 */}
           {(post.tags ?? []).map(t => (
             <span key={t} style={{ marginLeft: 7, color: 'color-mix(in srgb,var(--accent) 65%,var(--faint))' }}>#{t}</span>

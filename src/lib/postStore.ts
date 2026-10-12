@@ -65,6 +65,19 @@ export function commentsFor(
 
 export type FoldType = 'spoiler' | 'adult' | 'custom';
 
+/** 에디터가 다루지 못해 정리될 만한 태그·속성이 있는가 — 전환 경고 판단 (인트로와 같은 기준) */
+export const hasRichHtml = (html: string) =>
+  /<(table|thead|tbody|tr|td|th|div|span|section|article|video|audio|details|summary|font|center)\b/i.test(html)
+  || /\s(style|class|id)\s*=/i.test(html);
+
+/** 무엇으로 쓴 글인지 — 수정 화면의 모드와 글 메타의 표기에 쓴다. authored가 없는 옛 글은 본문을 보고 가른다:
+ *  에디터가 다룰 수 있는 HTML이면 에디터 글로 (사용자 제보: 에디터로 등록해도 HTML로 분류됨) */
+export function postAuthoredMode(p: { mode: PostMode; authored?: 'editor'; body: string }): 'editor' | 'md' | 'html' {
+  if (p.mode === 'md') return 'md';
+  if (p.authored === 'editor') return 'editor';
+  return hasRichHtml(p.body) ? 'html' : 'editor';
+}
+
 export interface Post {
   id: string;
   title: string;

@@ -10,7 +10,7 @@ export default function TCharNewPage() {
   // 등록 권한 (커플홈) — 환경설정 「권한」에서 (기본: 관리자) · ADD 버튼과 같은 판정으로 주소 직접 진입도 막는다
   const [menuSet, , menuLoaded] = useMenuSettings();
   if (!menuLoaded) return <section className="page" />;
-  if (!canWriteAt(menuSet, '/tchars', { loggedIn: !!user, isAdmin, id: user?.id }, 'admin')) {
+  if (!canWriteAt(menuSet, '/tchars', { loggedIn: !!user, isAdmin, id: user?.id }, 'member')) {
     return (
       <section className="page">
         <div className="page-head"><PageTitle>TRPG CHARACTERS</PageTitle><p>허용된 회원만 등록할 수 있습니다</p></div>

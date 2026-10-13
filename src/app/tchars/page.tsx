@@ -18,7 +18,7 @@ export default function TCharsPage() {
   const { user, isAdmin } = useAuth();
   // 등록 권한 (커플홈) — 환경설정 「권한」에서 (기본: 관리자) · 수정·삭제는 등록한 본인과 관리자
   const [menuSet] = useMenuSettings();
-  const canAdd = canWriteAt(menuSet, '/tchars', { loggedIn: !!user, isAdmin, id: user?.id }, 'admin');
+  const canAdd = canWriteAt(menuSet, '/tchars', { loggedIn: !!user, isAdmin, id: user?.id }, 'member');
   const canEdit = (c: TrpgChar) => isAdmin || (!!user && c.authorId === user.id);
   const { editOn } = useMainStore();
   const del = useConfirmDelete();

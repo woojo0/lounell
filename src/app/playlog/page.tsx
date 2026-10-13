@@ -42,7 +42,7 @@ function PlaylogPageInner() {
   // 표시 열 — 환경설정 > 메뉴 관리에서 PC/모바일 각각 선택 (4.16 v1.8)
   const [menuSet] = useMenuSettings();
   // 등록 권한 (커플홈) — 환경설정 「권한」에서 (기본: 관리자) · 수정·삭제는 등록한 본인과 관리자
-  const canAdd = canWriteAt(menuSet, writeKeyOf('/playlog', sec.id), { loggedIn: !!user, isAdmin, id: user?.id }, 'admin');
+  const canAdd = canWriteAt(menuSet, writeKeyOf('/playlog', sec.id), { loggedIn: !!user, isAdmin, id: user?.id }, 'member');
   const canEdit = (r: PlayRecord) => isAdmin || (!!user && r.authorId === user.id);
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {

@@ -2430,9 +2430,9 @@ function MenuPane() {
       if (!sec) return null;
       secId = sec.id;
     }
+    // TRPG 캐릭터·플레이기록도 기본 가입자 (커플홈 사용자 제보: 같이 쓰는 오너가 TRPG 캐릭터 등록 권한이 없다 — 「모든 게시판 권한」 요청의 누락분)
     const def: MenuPerm | null =
-      path === '/tchars' || path === '/playlog' ? 'admin'
-      : path === '/videos' || path === '/threads' || path === '/dotori' || path === '/log' ? 'member'   // RP LOG — 등록 권한이 있는 회원은 수정도 (trpgPerm.ts)
+      path === '/tchars' || path === '/playlog' || path === '/videos' || path === '/threads' || path === '/dotori' || path === '/log' ? 'member'   // RP LOG — 등록 권한이 있는 회원은 수정도 (trpgPerm.ts)
       // 추가 로드비 — 기본 페이지의 공통값(roadUpload)을 따르되 따로 정할 수 있다 (기본 페이지는 아래 /loadb 가지에서)
       : path === '/loadb' && secId !== MAIN_SEC ? (ms.roadUpload === 'admin' ? 'admin' : 'member')
       : null;

@@ -24,7 +24,7 @@ function PlaylogNewPageInner() {
   const [menuSet, , menuLoaded] = useMenuSettings();
 
   if (!menuLoaded) return <section className="page" />;
-  if (!user || !canWriteAt(menuSet, writeKeyOf('/playlog', sec.id), { loggedIn: true, isAdmin, id: user.id }, 'admin')) {
+  if (!user || !canWriteAt(menuSet, writeKeyOf('/playlog', sec.id), { loggedIn: true, isAdmin, id: user.id }, 'member')) {
     return (
       <section className="page">
         <div className="page-head"><PageTitle href={tt.href}>{tt.title}</PageTitle><p>허용된 회원만 등록할 수 있습니다</p></div>

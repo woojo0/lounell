@@ -35,7 +35,7 @@ export default function TCharDetailPage() {
   if (!c) {
     return (
       <section className="page">
-        <div className="page-head"><PageTitle>TRPG CHARACTERS</PageTitle><p>캐릭터를 찾을 수 없습니다</p></div>
+        <div className="page-head"><PageTitle href="/tchars">TRPG CHARACTERS</PageTitle><p>캐릭터를 찾을 수 없습니다</p></div>
       </section>
     );
   }
@@ -45,7 +45,7 @@ export default function TCharDetailPage() {
   return (
     <section className="page">
       <div className="page-head">
-        <PageTitle>TRPG CHARACTERS</PageTitle>
+        <PageTitle href="/tchars">TRPG CHARACTERS</PageTitle>
         <EditableDesc k="tchars-detail-desc" def="표정 썸네일을 누르면 이미지가 전환됩니다" />
         <div className="head-actions">
           {/* 수정·삭제는 등록한 본인과 관리자 (커플홈) */}

@@ -527,9 +527,16 @@ if(!on){hide();if(tools&&tools.parentNode)tools.parentNode.removeChild(tools)}}}
 </style>`;
   /** 주입 위치 — <!DOCTYPE ...> 가 있으면 그 **바로 뒤**에, 없으면 doctype을 만들어 앞에.
    *  표준 모드를 지켜야 body 높이가 진짜 내용 높이가 된다 (위 주석 참조) */
+  // 좁은 화면(폰)용 덮어쓰기 — 로그 문서 안쪽 여백(.log 16px·.chat 14px)을 줄이고 말풍선에 최소 폭(300px)을 둔다.
+  // 저장된 옛 로그의 HTML에는 CSS가 박혀 있으므로 보기 직전에 끼워 넣는다 (커플홈 사용자 제보: 페이지·패널·문서 여백이
+  // 3중으로 겹쳐 로그가 너무 좁았다). 원본 <style>이 뒤에 오므로 !important로 이긴다. 역극 페이지의 말풍선 규칙과 같은 값
+  const mobileCss = '<style>@media (max-width:620px){'
+    + '.log{padding:6px 0 28px!important}.chat{padding:10px 6px!important}.hd{margin-bottom:14px!important;padding-bottom:12px!important}'
+    + '.b{max-width:min(100%,max(300px,72%))!important}.sys{max-width:96%!important}.m{max-width:100%!important}.d{margin:14px 2%!important}'
+    + '}</style>';
   const buildDoc = (doc: string) => {
     const dt = /^\s*<!doctype[^>]*>/i.exec(doc);
-    return dt ? doc.slice(0, dt[0].length) + inject + doc.slice(dt[0].length) : `<!DOCTYPE html>${inject}${doc}`;
+    return dt ? doc.slice(0, dt[0].length) + inject + mobileCss + doc.slice(dt[0].length) : `<!DOCTYPE html>${inject}${mobileCss}${doc}`;
   };
   const srcDoc = buildDoc(sidedBody);
   // 텍스트 모양으로 저장된 역극 로그도 편집모드에서는 임시로 대본 모양 HTML로 그려 발화 단위로 고칠 수 있게 (저장은 텍스트 그대로)
@@ -574,7 +581,8 @@ if(!on){hide();if(tools&&tools.parentNode)tools.parentNode.removeChild(tools)}}}
       </div>
 
       {/* 본문만 폭 제한 — 헤더는 풀폭 위치 유지 */}
-      <div className="panel" style={{ padding: 24, maxWidth: 1000, margin: '0 auto' }}>
+      {/* log-panel — 좁은 화면에서는 패널 여백·테두리를 없앤다 (커플홈 사용자 제보: 페이지·패널·문서 안쪽 여백이 3중으로 겹쳐 로그가 너무 좁았다) */}
+      <div className="panel log-panel" style={{ maxWidth: 1000, margin: '0 auto' }}>
         <h2 style={{
           fontFamily: l.serifTitle ? 'var(--serif)' : "'Noto Serif KR',serif",
           fontSize: 24, fontWeight: 700,

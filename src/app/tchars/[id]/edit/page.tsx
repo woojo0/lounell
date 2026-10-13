@@ -17,14 +17,14 @@ export default function TCharEditPage() {
   if (!(isAdmin || (!!user && !!c && c.authorId === user.id))) {
     return (
       <section className="page">
-        <div className="page-head"><PageTitle>TRPG CHARACTERS</PageTitle><p>등록한 본인과 관리자만 수정할 수 있습니다</p></div>
+        <div className="page-head"><PageTitle href="/tchars">TRPG CHARACTERS</PageTitle><p>등록한 본인과 관리자만 수정할 수 있습니다</p></div>
       </section>
     );
   }
   return (
     <section className="page">
       <div className="page-head">
-        <PageTitle>TRPG CHARACTERS</PageTitle>
+        <PageTitle href="/tchars">TRPG CHARACTERS</PageTitle>
         <EditableDesc k="tchars-edit-desc" def="캐릭터 수정" />
       </div>
       <TCharForm editId={id} />

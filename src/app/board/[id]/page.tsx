@@ -52,7 +52,7 @@ export default function BoardDetailPage() {
   if (!post) {
     return (
       <section className="page">
-        <div className="page-head"><PageTitle>BOARD</PageTitle><p>글을 찾을 수 없습니다</p></div>
+        <div className="page-head"><PageTitle href="/board">BOARD</PageTitle><p>글을 찾을 수 없습니다</p></div>
       </section>
     );
   }
@@ -62,7 +62,7 @@ export default function BoardDetailPage() {
   if (post.secret && !isAdmin && !isAuthor) {
     return (
       <section className="page">
-        <div className="page-head"><PageTitle>BOARD</PageTitle><p>비밀글 — 작성자와 관리자만 열람할 수 있습니다</p></div>
+        <div className="page-head"><PageTitle href="/board">BOARD</PageTitle><p>비밀글 — 작성자와 관리자만 열람할 수 있습니다</p></div>
       </section>
     );
   }

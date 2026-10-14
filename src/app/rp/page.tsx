@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/auth';
 import { useLocalList, newId, LIST_QUIET_ERR_EVT } from '@/lib/postStore';
 import {
   RpRoom, RpMessage, RP_SEED, hexRgb, rpLastDate, rpHasNew,
-  RpMessageRow, RP_MSG_KEY, RP_MSG_SEED, messagesFor, rpMarkRead, rpMemberIds, RpTyping, RP_TYPING_KEY, RP_TYPING_SEED, TYPING_TTL, typingId } from '@/lib/rpStore';
+  RpMessageRow, RP_MSG_KEY, RP_MSG_SEED, messagesFor, rpMarkRead, rpMemberIds, RpTyping, RP_TYPING_KEY, RP_TYPING_SEED, TYPING_TTL, typingId, msgKey } from '@/lib/rpStore';
 import { Character, CHAR_SEED, Relation, REL_SEED, charGrant, charWithAu, pairSides , faceCropOf } from '@/lib/charStore';
 import { phStyle } from '@/lib/color';
 import { Modal, ConfirmModal, useConfirmDelete } from '@/components/ui/Modal';
@@ -253,8 +253,9 @@ export default function RpPage() {
     };
     // 사진과 글을 같이 보내면 **따로 두 개**로 (사용자 확정 — 한 글에 사진+말풍선이 붙는 모양이 별로였다): 사진 먼저, 글 다음
     // 순서는 시각(date)으로 정해지는데, 기기마다 시계가 조금씩 달라 핑퐁할 때 내 글이 상대 글 **앞으로** 끼어드는 일이 있다
-    // (cm_260929 7ae1f20 — 「실시간으로 핑퐁하면 순서가 섞인다」). 내가 이미 본 마지막 발화보다 늘 1ms 뒤로 찍어 뒤에 붙게 한다
-    const lastSeen = Math.max(0, ...allMsgs.map(m => Date.parse(m.date) || 0));
+    // (cm_260929 7ae1f20 — 「실시간으로 핑퐁하면 순서가 섞인다」). 내가 이미 본 마지막 발화보다 늘 1ms 뒤로 찍어 뒤에 붙게 한다.
+    // 옮긴 발화(ord — 소수 키)까지 포함해 본다: 키 < 정수 부분 + 1 ≤ lastSeen + 1 이라 새 발화는 언제나 맨 뒤 (cm_260929 c54eae2)
+    const lastSeen = Math.max(0, ...allMsgs.map(m => Math.floor(msgKey(m))));
     const now = Math.max(Date.now(), lastSeen + 1);
     const out: RpMessage[] = [];
     if (imgId) out.push({ ...base, id: newId(), text: '', date: new Date(now).toISOString(), imgId });
@@ -317,19 +318,26 @@ export default function RpPage() {
   };
   const moveMsg = (m: RpMessage, dir: 'up' | 'down') => {
     if (!sel) return;
-    const list = msgsOf(sel);   // 시간순 전체 (잘라 둔 이전 대화 포함)
+    const list = msgsOf(sel);   // 화면 순서 그대로 (잘라 둔 이전 대화 포함)
     const i = list.findIndex(x => x.id === m.id);
     const j = dir === 'up' ? i - 1 : i + 1;
     if (i < 0 || j < 0 || j >= list.length) { toast(dir === 'up' ? '맨 위입니다' : '맨 아래입니다'); return; }
-    const t1 = Date.parse(list[j].date);                                   // 자리를 바꿀 이웃
-    const beyond = list[dir === 'up' ? j - 1 : j + 1];                     // 그 너머 — 둘 사이로 들어간다
-    const t2 = beyond ? Date.parse(beyond.date) : (dir === 'up' ? t1 - 2000 : t1 + 2000);
-    let t = Math.round((t1 + t2) / 2);
-    if (t === t1 || t === t2) t = dir === 'up' ? t1 - 1 : t1 + 1;
-    const date = new Date(t).toISOString();
-    if (msgRows.some(x => x.id === m.id)) setMsgRows(msgRows.map(x => (x.id === m.id ? { ...x, date } : x)));
-    else setRooms(rooms.map(r => r.id === sel.id
-      ? { ...r, messages: r.messages.map(x => (x.id === m.id ? { ...x, date } : x)) } : r));
+    // 바로 옆 발화(j)를 넘어 그 너머 발화와의 사이로 들어간다 — 정확히 한 칸 (v2.1).
+    // 예전에는 ms 정수 시각만 써서, 1ms 간격으로 붙은 발화들(시계가 늦은 기기에서 연달아 보낸 글) 사이에서는 자리가 없어
+    // 너머 발화와 같은 시각이 되었고, 그 둘의 순서가 저장 순서에 맡겨져 두 칸씩 튀기도 했다. 이제는 소수 키(ord)로 그 사이에 넣는다.
+    // 너머 발화가 j와 키까지 같으면(아주 옛 기록의 같은 시각) 같은 키 묶음 너머까지 본다 — 같은 키 사이에는 자리가 없다
+    const step = dir === 'up' ? -1 : 1;
+    const k1 = msgKey(list[j]);
+    let b = j + step;
+    while (b >= 0 && b < list.length && msgKey(list[b]) === k1) b += step;
+    const k2 = b >= 0 && b < list.length ? msgKey(list[b]) : k1 + step * 2000;
+    const key = (k1 + k2) / 2;
+    if (!(Math.min(k1, k2) < key && key < Math.max(k1, k2))) { toast('여기서는 더 옮길 수 없습니다'); return; }
+    // 시각은 키의 정수 부분 — 메신저 방의 묶음 간격(30분)·다음 발화 시각 계산이 화면 순서와 어긋나지 않는다
+    const date = new Date(Math.floor(key)).toISOString();
+    const patch = <T extends RpMessage>(x: T): T => (x.id === m.id ? { ...x, date, ord: key } : x);
+    if (msgRows.some(x => x.id === m.id)) setMsgRows(msgRows.map(patch));
+    else setRooms(rooms.map(r => r.id === sel.id ? { ...r, messages: r.messages.map(patch) } : r));
   };
 
   // 방 개설 모달
@@ -626,10 +634,11 @@ export default function RpPage() {
                   const rightSide = ch
                     ? (!!charGrant(ch, user.id) || (!!ch.own && isAdmin))
                     : (!!m.charOwn && isAdmin);
-                  // 메신저 방의 이름 — 말하는 캐릭터가 바뀔 때만 (사용자 확정): 같은 캐릭터가 이어 말하면 생략,
-                  // 상대 글 바로 다음에 내가 일반 RP를 쓰는 식으로 바뀌면 적는다. 기본 방은 늘 적는다
+                  // 이름은 말하는 캐릭터가 바뀔 때만 (사용자 확정): 같은 캐릭터가 이어 말하면 묶음의 첫 줄에만 적는다.
+                  // 기본(대본) 방도 마찬가지 (v2.1 사용자 요청 — 예전엔 메신저 방만 이랬고 기본 방은 줄마다 적었다). 지문이 끼면 다시 적는다.
+                  // 화면에 그린 순서(arr) 기준이라 「위로/아래로 보내기」로 순서를 바꾸면 바뀐 순서대로 다시 묶인다
                   const prevMsg = arr[mi - 1];
-                  const nameNeeded = !imsg || !prevMsg || prevMsg.kind !== 'char' || prevMsg.charId !== m.charId;
+                  const nameNeeded = !prevMsg || prevMsg.kind !== 'char' || prevMsg.charId !== m.charId;
                   // 얼굴은 같은 캐릭터가 이어 말한 묶음의 **맨 끝**에 하나만 (아이폰 문자처럼) — 문자·일반 RP가 섞여도 한 번
                   const nextMsg = arr[mi + 1];
                   const runEnd = !nextMsg || nextMsg.kind !== 'char' || nextMsg.charId !== m.charId;
@@ -672,7 +681,7 @@ export default function RpPage() {
                         ? <Face ch={ch} crop={faceOf(ch)} className="face" />
                         : !rightSide && (runEnd ? <Face ch={ch} crop={faceOf(ch)} className="face" /> : <span className="face spacer" />)}
                       <div>
-                        {/* 메신저 방의 일반 RP 글은 말하는 캐릭터가 바뀔 때만 이름 (사용자 확정) */}
+                        {/* 이름은 말하는 캐릭터가 바뀔 때만 — 기본 방도, 메신저 방의 일반 RP 글도 (얼굴은 기본 방에서 줄마다 그대로) */}
                         {nameNeeded && <div className="who">{name}</div>}
                         <div className="bub">
                           {m.imgId && <div className="rp-pic" onClick={() => setLbImg(m.imgId!)}><BlobImg fileRef={m.imgId} ph="" label="" /></div>}

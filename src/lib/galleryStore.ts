@@ -295,7 +295,11 @@ export interface PlayRecord {
   scenarioLink?: string;     // 시나리오 링크 — 표에서 이름 클릭 시 새 탭
   writer: string;
   withText: string;          // With
-  role: string;              // PL·GM·HO1 등 짧은 표기
+  /** 옛 Role 칸 (PL·GM·HO1 등) — 커플홈에서 뺐다 (사용자 요청: 누가 KPC인가는 중요하지 않다). 옛 값은 남겨 두되 보이지 않는다 */
+  role?: string;
+  /** GMPC · PC (커플홈 사용자 요청) — 직접 적은 이름이나 연동한 캐릭터 (자관 캐릭터·AU / TRPG 캐릭터, lib/playChar.ts) */
+  gmpc?: import('./playChar').PlayCharRef;
+  pc?: import('./playChar').PlayCharRef;
   playtime: string;          // 4h 30m 등 자유 표기
   url?: string;              // Url (optional) — 클립 아이콘, 새 탭
   logId?: string;            // 내 홈 로그 백업 연결 (모바일: Playtime 밑줄)

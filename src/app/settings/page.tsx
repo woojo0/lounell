@@ -3069,7 +3069,7 @@ function TrpgPane() {
       {/* 플레이기록 표시 열 — PC/모바일 각각 (4.16 v1.8 · v1.9에서 TRPG 탭 하단 배치) */}
       <hr style={{ margin: '24px 0', border: 'none', borderTop: '1.5px solid var(--line)' }} />
       <h3>플레이기록 표시 열</h3>
-      <div className="d">PC와 모바일에서 보여줄 열을 각각 선택 (기본: PC 전체 7열 · 모바일 Date/Scenario/Role/Playtime)</div>
+      <div className="d">PC와 모바일에서 보여줄 열을 각각 선택 (기본: PC 전체 · 모바일 Date/Scenario/GMPC/PC/Playtime)</div>
       {/* 라벨 폭 고정 — PC/모바일 폭 차이로 두 줄 체크박스 시작점이 어긋나던 것 정렬 (v1.9) */}
       <div className="set-row" style={{ flexWrap: 'wrap' }}>
         <div className="l" style={{ width: 64, flexShrink: 0 }}><b>PC</b></div>

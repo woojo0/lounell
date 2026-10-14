@@ -4,13 +4,55 @@
 import React, { useState } from 'react';
 import { PlayRecord, TrpgLog, TRPG_SEED } from '@/lib/galleryStore';
 import { useLocalList } from '@/lib/postStore';
-import { KInput, KDate } from '@/components/ui/Kit';
+import { Character, CHAR_SEED, Relation, REL_SEED, charAuOptions } from '@/lib/charStore';
+import { TrpgChar, TCHAR_SEED } from '@/lib/tcharStore';
+import { PlayCharRef, playCharEmpty } from '@/lib/playChar';
+import { KInput, KDate, KSelect } from '@/components/ui/Kit';
 import { useToast } from '@/components/ui/Toast';
 
 export interface PlaylogFormValue {
   date?: string; scenario: string; scenarioLink?: string;
-  writer: string; withText: string; role: string; playtime: string;
+  writer: string; withText: string; playtime: string;
+  /** GMPC · PC (커플홈 — Role 대신) — 비우면 undefined */
+  gmpc?: PlayCharRef; pc?: PlayCharRef;
   url?: string; logId?: string;
+}
+
+type CharOpt = { value: string; label: string; ref: PlayCharRef };
+
+/** GMPC · PC 칸 하나 — 직접 적기 / 자관 캐릭터(AU 포함) / TRPG 캐릭터 중 골라 연동 (커플홈 사용자 요청) */
+function CharPick({ label, value, onChange, relOpts, tOpts }: {
+  label: string; value?: PlayCharRef; onChange: (v?: PlayCharRef) => void;
+  relOpts: CharOpt[]; tOpts: CharOpt[];
+}) {
+  const [mode, setMode] = useState<'text' | 'rel' | 'tchar'>(value?.src ?? 'text');
+  const opts = mode === 'rel' ? relOpts : tOpts;
+  const cur = value?.src === mode && value.charId ? opts.find(o => o.ref.charId === value.charId && (o.ref.auKey ?? '') === (value.auKey ?? '')) : undefined;
+  const pickMode = (m: 'text' | 'rel' | 'tchar') => {
+    setMode(m);
+    // 직접 적기로 돌아가면 연동만 풀고 이름은 남긴다 — 다른 출처로 바꾸면 고를 때까지 비운다
+    if (m === 'text') onChange(value?.name?.trim() ? { name: value.name } : undefined);
+    else if (value?.src !== m) onChange(undefined);
+  };
+  return (
+    <div>
+      <label className="k-label" style={{ marginBottom: 5 }}>{label}</label>
+      <div className="mini-seg" style={{ marginBottom: 6 }}>
+        <button className={mode === 'text' ? 'on' : ''} onClick={() => pickMode('text')}>직접</button>
+        <button className={mode === 'rel' ? 'on' : ''} onClick={() => pickMode('rel')}>자관 캐릭터</button>
+        <button className={mode === 'tchar' ? 'on' : ''} onClick={() => pickMode('tchar')}>TRPG 캐릭터</button>
+      </div>
+      {mode === 'text' ? (
+        <KInput value={value?.src ? '' : value?.name ?? ''} onChange={e => onChange(e.target.value ? { name: e.target.value } : undefined)} />
+      ) : opts.length === 0 ? (
+        <p className="hint" style={{ margin: 0 }}>{mode === 'rel' ? '자관에 넣은 캐릭터가 없습니다' : 'TRPG 캐릭터 리스트가 비어 있습니다'}</p>
+      ) : (
+        <KSelect minWidth={180} maxWidth={320} value={cur?.value ?? ''} placeholder="캐릭터 선택"
+          options={[{ value: '', label: '캐릭터 선택' }, ...opts.map(o => ({ value: o.value, label: o.label }))]}
+          onChange={v => { const o = opts.find(x => x.value === v); onChange(o ? o.ref : undefined); }} />
+      )}
+    </div>
+  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -36,7 +78,22 @@ export function PlaylogForm({ initial, records, onSave, onCancel }: {
   const [scenarioLink, setScenarioLink] = useState(initial?.scenarioLink ?? '');
   const [writer, setWriter] = useState(initial?.writer ?? '');
   const [withText, setWithText] = useState(initial?.withText ?? '');
-  const [role, setRole] = useState(initial?.role ?? '');
+  // GMPC · PC (커플홈 — Role 대신). 옛 기록의 role 값은 건드리지 않는다(보이지 않게 남는다)
+  const [gmpc, setGmpc] = useState<PlayCharRef | undefined>(initial?.gmpc);
+  const [pc, setPc] = useState<PlayCharRef | undefined>(initial?.pc);
+  const [chars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
+  const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
+  const [tchars] = useLocalList<TrpgChar>('ohome.tchars.v1', TCHAR_SEED);
+  // 자관 캐릭터 — 자관 멤버인 캐릭터의 원래 모습 + 그 자관의 AU마다 하나씩 (메모·감상타래와 같은 목록)
+  const relChars = chars.filter(c => rels.some(r => r.members.some(m => m.charId === c.id)));
+  const relOpts: CharOpt[] = charAuOptions(relChars, rels).map(o => ({
+    value: `${o.charId}|${o.auKey ?? ''}`, label: o.label,
+    ref: { name: o.char.name, src: 'rel', charId: o.charId, ...(o.auKey ? { auKey: o.auKey } : {}) },
+  }));
+  const tOpts: CharOpt[] = tchars.map(t => ({
+    value: t.id, label: t.rule ? `${t.name} · ${t.rule}` : t.name,
+    ref: { name: t.name, src: 'tchar', charId: t.id },
+  }));
   const [playtime, setPlaytime] = useState(initial?.playtime ?? '');
   const [linkMode, setLinkMode] = useState<'url' | 'log'>(initial?.logId ? 'log' : 'url');
   const [url, setUrl] = useState(initial?.url ?? '');
@@ -56,7 +113,9 @@ export function PlaylogForm({ initial, records, onSave, onCancel }: {
       date: date || undefined,
       scenario: scenario.trim(),
       scenarioLink: scenarioLink.trim() || undefined,
-      writer: writer.trim(), withText: withText.trim(), role: role.trim(), playtime: playtime.trim(),
+      writer: writer.trim(), withText: withText.trim(), playtime: playtime.trim(),
+      gmpc: playCharEmpty(gmpc) ? undefined : { ...gmpc!, name: gmpc!.name.trim() },
+      pc: playCharEmpty(pc) ? undefined : { ...pc!, name: pc!.name.trim() },
       url: linkMode === 'url' ? (url.trim() || undefined) : undefined,
       logId: linkMode === 'log' ? (logId || undefined) : undefined,
     });
@@ -97,9 +156,11 @@ export function PlaylogForm({ initial, records, onSave, onCancel }: {
           )}
         </div>
         <Field label="Scenario Link (optional)"><KInput value={scenarioLink} onChange={e => setScenarioLink(e.target.value)} /></Field>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px', gap: 10 }}>
-          <Field label="Writer"><KInput value={writer} onChange={e => setWriter(e.target.value)} /></Field>
-          <Field label="Role"><KInput value={role} onChange={e => setRole(e.target.value)} /></Field>
+        <Field label="Writer"><KInput value={writer} onChange={e => setWriter(e.target.value)} /></Field>
+        {/* GMPC · PC (커플홈 사용자 요청 — Role 대신, 캐릭터 연동) */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 10 }}>
+          <CharPick label="GMPC" value={gmpc} onChange={setGmpc} relOpts={relOpts} tOpts={tOpts} />
+          <CharPick label="PC" value={pc} onChange={setPc} relOpts={relOpts} tOpts={tOpts} />
         </div>
         <Field label="With"><KInput value={withText} onChange={e => setWithText(e.target.value)} /></Field>
 

@@ -15,7 +15,15 @@ export interface RpMessage {
   rp?: boolean;
   /** 사진 메시지 (커플홈 — 메신저 방에서 상대에게 사진을 보냈다는 컨셉) — 파일 id. 글 없이 사진만도 된다 */
   imgId?: string;
+  /** 정렬 키 (ms, 소수 허용) — 말풍선 우클릭 「위로/아래로 보내기」로 옮긴 발화에만 적는다 (v2.1).
+   *  시각(date)은 ms 단위라, 시계가 늦은 기기에서 1ms 간격으로 찍힌 발화들 사이에는 옮길 자리가 없어
+   *  같은 시각이 생기면서 두 칸씩 튀었다. 옮길 때는 이웃 사이의 소수 값을 여기에 적고 date는 그 정수 부분으로 맞춘다 */
+  ord?: number;
 }
+
+/** 발화의 정렬 키 — 옮긴 발화는 ord, 아니면 시각(date) */
+export const msgKey = (m: Pick<RpMessage, 'date' | 'ord'>): number =>
+  typeof m.ord === 'number' && Number.isFinite(m.ord) ? m.ord : (Date.parse(m.date) || 0);
 
 export interface RpRoom {
   id: string;
@@ -99,7 +107,8 @@ export function messagesFor(rows: RpMessageRow[], roomId: string, legacy: RpMess
   const seen = new Set(mine.map(r => r.id));
   return [...legacy.filter(m => !seen.has(m.id)), ...mine]
     .map(m => (m.kind === 'player' ? { ...m, kind: 'desc' as const, charId: undefined } : m))
-    .sort((a, b) => a.date.localeCompare(b.date));
+    // 정렬 키 순 — 키가 같으면(아주 옛 기록의 같은 시각) id로, 기기마다 받은 순서가 달라도 같은 순서로 보이게 (v2.1)
+    .sort((a, b) => msgKey(a) - msgKey(b) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 
 /* ---------- 읽음 표시 (v2.0) ----------

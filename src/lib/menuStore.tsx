@@ -105,7 +105,9 @@ export const PLAYLOG_COLS: { key: string; label: string }[] = [
   { key: 'scenario', label: 'Scenario' },
   { key: 'writer', label: 'Writer' },
   { key: 'with', label: 'With' },
-  { key: 'role', label: 'Role' },
+  // Role 대신 GMPC · PC (커플홈 사용자 요청 — 누가 KPC인가는 중요하지 않다, 캐릭터를 연동한다)
+  { key: 'gmpc', label: 'GMPC' },
+  { key: 'pc', label: 'PC' },
   { key: 'playtime', label: 'Playtime' },
   { key: 'url', label: 'Url' },
 ];
@@ -115,8 +117,8 @@ export const DEFAULT_MENU_SETTINGS: MenuSettings = {
   groupOrder: DEFAULT_MENU.map(m => m.label),
   hidden: [],
   labels: {},
-  playlogPc: PLAYLOG_COLS.map(c => c.key),                       // PC 기본 전체 7열
-  playlogMobile: ['date', 'scenario', 'role', 'playtime'],       // 모바일 기본 4열 (v1.8)
+  playlogPc: PLAYLOG_COLS.map(c => c.key),                       // PC 기본 전체 8열
+  playlogMobile: ['date', 'scenario', 'gmpc', 'pc', 'playtime'], // 모바일 기본 5열 (Role → GMPC·PC, 커플홈)
   roadUpload: 'member', roadComment: 'guest',
   backupView: 'gal',
   calTitle: 'en',
@@ -124,6 +126,10 @@ export const DEFAULT_MENU_SETTINGS: MenuSettings = {
 };
 
 const KEY = 'ohome.menuset.v1';
+
+/** 옛 Role 열을 GMPC · PC로 (커플홈) — 이미 있으면 겹치지 않게 */
+const playlogCols = (list: string[]): string[] =>
+  [...new Set(list.flatMap(k => (k === 'role' ? ['gmpc', 'pc'] : [k])))];
 
 /** 주소를 바꾼 메뉴 (v2.0 사용자 요청) — 옛 이름이 그대로였던 것들 */
 const MOVED: Record<string, string> = { '/roadview': '/loadb', '/backup': '/gallery', '/trpg': '/log' };   // /trpg → /log (커플홈)
@@ -154,6 +160,9 @@ function moveHrefs(p: Partial<MenuSettings>): Partial<MenuSettings> {
       })),
     } : {}),
     ...(p.removedBoards ? { removedBoards: p.removedBoards.map(mv) } : {}),
+    // 플레이기록 표시 열 — 옛 Role 열은 GMPC · PC 두 열로 (커플홈 사용자 요청). 저장은 다음 SAVE 때 새 이름으로 남는다
+    ...(p.playlogPc ? { playlogPc: playlogCols(p.playlogPc) } : {}),
+    ...(p.playlogMobile ? { playlogMobile: playlogCols(p.playlogMobile) } : {}),
     // 게시판별 글쓰기 권한·멤버는 주소가 키다 (writeKeyOf) — 주소를 옮기면 키도 옮긴다 (커플홈 — /trpg → /log)
     ...(p.writePerm ? { writePerm: Object.fromEntries(Object.entries(p.writePerm).map(([k, v]) => [mv(k), v])) } : {}),
     ...(p.writeMembers ? { writeMembers: Object.fromEntries(Object.entries(p.writeMembers).map(([k, v]) => [mv(k), v])) } : {}),

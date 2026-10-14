@@ -36,7 +36,7 @@ export default function PlaylogEditPage() {
       <PlaylogForm initial={r} records={records}
         onCancel={() => router.push('/playlog')}
         onSave={v => {
-          setRecords(records.map(x => (x.id === r.id ? { ...x, ...v, date: v.date, url: v.url, logId: v.logId, scenarioLink: v.scenarioLink } : x)));
+          setRecords(records.map(x => (x.id === r.id ? { ...x, ...v, date: v.date, url: v.url, logId: v.logId, scenarioLink: v.scenarioLink, gmpc: v.gmpc, pc: v.pc } : x)));
           toast('저장되었습니다');
           router.push('/playlog');
         }} />

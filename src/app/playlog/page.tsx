@@ -7,6 +7,9 @@ import { useAuth } from '@/lib/auth';
 import { useSectionParam, filterSection, sectionSetter, secQuery } from '@/lib/sectionStore';
 import { useLocalList } from '@/lib/postStore';
 import { PlayRecord, PLAYLOG_SEED } from '@/lib/galleryStore';
+import { Character, CHAR_SEED, Relation, REL_SEED } from '@/lib/charStore';
+import { TrpgChar, TCHAR_SEED } from '@/lib/tcharStore';
+import { playCharView, PlayCharView } from '@/lib/playChar';
 import { useMenuSettings, canWriteAt, writeKeyOf } from '@/lib/menuStore';
 import { useMainStore } from '@/lib/mainStore';
 import { useCardSort, mergeOrder } from '@/lib/cardSort';
@@ -38,6 +41,16 @@ function PlaylogPageInner() {
   const [desc, setDesc] = useState(true);       // Date 정렬 방향
   const [page, setPage] = useState(1);
   const [delFor, setDelFor] = useState<PlayRecord | null>(null);
+  // GMPC · PC 칸의 연동 캐릭터 (커플홈) — 지금 이름·색·주소로 보인다
+  const [chars] = useLocalList<Character>('ohome.chars.v1', CHAR_SEED);
+  const [rels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
+  const [tchars] = useLocalList<TrpgChar>('ohome.tchars.v1', TCHAR_SEED);
+  const viewOf = (r: PlayRecord, k: 'gmpc' | 'pc') => playCharView(r[k], chars, rels, tchars);
+  const charCell = (v: PlayCharView | null) => (v ? (
+    v.href
+      ? <a data-tip={v.tip} onClick={() => router.push(v.href!)}>{v.color && <i className="pl-dot" style={{ background: v.color }} />}{v.name}</a>
+      : <span>{v.name}</span>
+  ) : null);
 
   // 표시 열 — 환경설정 > 메뉴 관리에서 PC/모바일 각각 선택 (4.16 v1.8)
   const [menuSet] = useMenuSettings();
@@ -65,7 +78,8 @@ function PlaylogPageInner() {
   const filtered = records.filter(r => !query
     || r.scenario.toLowerCase().includes(query)
     || r.writer.toLowerCase().includes(query)
-    || r.withText.toLowerCase().includes(query));
+    || r.withText.toLowerCase().includes(query)
+    || (['gmpc', 'pc'] as const).some(k => viewOf(r, k)?.name.toLowerCase().includes(query)));
 
   // Date 정렬 — 날짜 없는 기록은 항상 맨 아래 (4.16)
   const sorted = [...filtered].sort((a, b) => {
@@ -89,7 +103,7 @@ function PlaylogPageInner() {
         <PageTitle>{sec.id === 'main' ? 'PLAY LOG' : sec.name}</PageTitle>
         <EditableDesc k="playlog-desc" def="다녀온 세션 기록 — 표 형식" />
         <div className="head-actions">
-          <SearchBar placeholder="시나리오·라이터·동행 검색" onSearch={v => { setQ(v); setPage(1); }} />
+          <SearchBar placeholder="시나리오·라이터·동행·캐릭터 검색" onSearch={v => { setQ(v); setPage(1); }} />
           {canAdd && <button className="btn btn-dark" onClick={() => router.push('/playlog/new' + secQuery('playlog', sec.id))}>＋ ADD RECORD</button>}
         </div>
       </div>
@@ -102,7 +116,8 @@ function PlaylogPageInner() {
             {show('scenario') && <col className="c-sc" />}
             {show('writer') && <col className="c-wr" />}
             {show('with') && <col className="c-with" />}
-            {show('role') && <col className="c-role" />}
+            {show('gmpc') && <col className="c-gmpc" />}
+            {show('pc') && <col className="c-pc" />}
             {show('playtime') && <col className="c-pt" />}
             {show('url') && <col className="c-url" />}
             {canAdd && !isMobile && <col className="c-mng" />}
@@ -117,7 +132,8 @@ function PlaylogPageInner() {
               {show('scenario') && <th>Scenario</th>}
               {show('writer') && <th>Writer</th>}
               {show('with') && <th>With</th>}
-              {show('role') && <th>Role</th>}
+              {show('gmpc') && <th>GMPC</th>}
+              {show('pc') && <th>PC</th>}
               {show('playtime') && <th>Playtime</th>}
               {show('url') && <th aria-label="Url" />}
               {canAdd && !isMobile && <th aria-label="관리" />}
@@ -136,7 +152,8 @@ function PlaylogPageInner() {
                 )}
                 {show('writer') && <td>{r.writer}</td>}
                 {show('with') && <td>{r.withText}</td>}
-                {show('role') && <td className="td-role">{r.role}</td>}
+                {show('gmpc') && <td className="td-ch">{charCell(viewOf(r, 'gmpc'))}</td>}
+                {show('pc') && <td className="td-ch">{charCell(viewOf(r, 'pc'))}</td>}
                 {show('playtime') && (
                   <td className={`td-pt ${r.logId ? 'linked' : ''}`}
                     onClick={() => openLogMobile(r)}>

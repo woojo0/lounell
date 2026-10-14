@@ -1656,7 +1656,11 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 .pl-table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:calc(12.5px*var(--fs,1))}
 .pl-table col.c-date{width:92px}
 .pl-table col.c-wr{width:90px}
-.pl-table col.c-role{width:76px}   /* CoC 7th 같은 룰 표기가 들어간다 — 시나리오·With에서 10px씩 가져옴 (v2.0 사용자 요청) */
+/* GMPC · PC (커플홈 — Role 대신) — 캐릭터 이름 칸. 연동한 캐릭터는 테마색 점 + 누르면 캐릭터 페이지 */
+.pl-table col.c-gmpc,.pl-table col.c-pc{width:96px}
+.pl-table .td-ch a{cursor:var(--cur-pointer,pointer);border-bottom:1px solid var(--line);transition:.15s}
+.pl-table .td-ch a:hover{color:var(--accent);border-color:var(--accent)}
+.pl-table .td-ch .pl-dot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:1px}
 .pl-table col.c-pt{width:82px}
 .pl-table col.c-url{width:36px}    /* 맨 끝 클립 칸 */
 .pl-table col.c-mng{width:58px}
@@ -1670,7 +1674,7 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 .pl-table .td-sc{font-weight:600}  /* Scenario — 가장 넓고 가운데 정렬 (4.16) */
 .pl-table .td-sc a{border-bottom:1px solid var(--line);transition:.15s}
 .pl-table .td-sc a:hover{color:var(--accent);border-color:var(--accent)}
-.pl-table .td-role{font-size:calc(11px*var(--fs,1));letter-spacing:.06em;color:var(--sub)}
+.pl-table .td-ch{font-size:calc(12px*var(--fs,1))}
 .pl-table .td-date{font-size:calc(11.5px*var(--fs,1));color:var(--sub);letter-spacing:.03em}
 /* Playtime 밑줄·탭 이동은 모바일 전용 — PC는 맨 끝 클립 칸이 담당 (4.16) */
 @media (max-width:620px){
@@ -1683,7 +1687,9 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 .pl-table .td-mng button{width:22px;height:22px;border-radius:6px;font-size:calc(10.5px*var(--fs,1));color:var(--faint);transition:.13s;vertical-align:middle;margin:-2px 0}
 .pl-table .td-mng button:hover{background:rgba(127,127,127,.14);color:var(--ink)}
 /* 모바일 기본 4열: Date/Scenario/Role/Playtime (4.16 — 열 선택 설정은 메뉴 관리 구현 시) */
-@media (max-width:620px){.pl-table .hide-m,.pl-table col.c-wr,.pl-table col.c-with,.pl-table col.c-url,.pl-table col.c-mng{display:none}}
+@media (max-width:620px){.pl-table .hide-m,.pl-table col.c-wr,.pl-table col.c-with,.pl-table col.c-url,.pl-table col.c-mng{display:none}
+  /* 모바일은 칸이 빠듯하다 — 날짜·시간·캐릭터 칸을 줄여 시나리오 자리를 남긴다 (GMPC·PC 두 칸이 들어오면서) */
+  .pl-table col.c-date{width:76px}.pl-table col.c-pt{width:58px}.pl-table col.c-gmpc,.pl-table col.c-pc{width:64px}}
 
 /* ---------- 그림게시판 로드뷰 (4.10) ---------- */
 .roadview-item{display:grid;grid-template-columns:1fr 390px;margin-bottom:22px;overflow:hidden;padding:0} /* 우측 댓글 폭 확대 (320→390) */

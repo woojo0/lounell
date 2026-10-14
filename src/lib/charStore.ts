@@ -164,6 +164,9 @@ export function charWithAu(c: Character, auKey?: string | null): Character {
     artId: p.arts?.[0],
     thumbId: p.thumbId,
     thumbCrop: p.thumbCrop,
+    // 상세 대표 아트 위치도 AU 자기 것 (커플홈 사용자 제보 — 「이미지 위치 조정이 안 돼」). 저장은 AU 프로필에 하는데
+    // 여기서 빠져 있어서, AU 화면은 원본 캐릭터의 위치(대개 없음 = 가운데)를 계속 썼다. 그림처럼 물려받지 않는다
+    artCrop: p.artCrop,
     ...(p.fontId !== undefined ? { fontId: p.fontId } : {}),
     ...(p.bodyFontId !== undefined ? { bodyFontId: p.bodyFontId } : {}),
     // nameSize는 여태 병합에 빠져 있었다 — AU에 저장은 되는데 표시가 base 크기를 따랐다 (v2.0 수정)

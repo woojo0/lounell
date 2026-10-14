@@ -89,8 +89,11 @@ function CharDetailInner() {
 
   /** 상세 화면 아트 위치 저장 (v2.0) — AU를 보는 중이면 그 AU에만, 아니면 원본에 */
   const saveArtCrop = (c: CropValue | undefined) => {
+    if (!ch) return;
     setChars(chars.map(x => {
-      if (x.id !== id) return x;
+      // 주소의 값(id)이 아니라 찾은 캐릭터의 진짜 id로 (커플홈 사용자 제보 — 「우클릭으로 위치를 조절해도 안 바뀐다」).
+      // 별명 주소(/chars/별명)로 열면 주소 값이 id와 달라 어느 캐릭터에도 저장되지 않았다
+      if (x.id !== ch.id) return x;
       if (!auKey) return { ...x, artCrop: c };
       return { ...x, auProfiles: { ...x.auProfiles, [auKey]: { ...x.auProfiles?.[auKey], artCrop: c } } };
     }));

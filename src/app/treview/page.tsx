@@ -1,44 +1,40 @@
 'use client';
-// TRPG 리뷰 게시판 (v2.1 사용자 요청) — 시나리오마다 별점 + 한줄 평. 3:4 타일 그리드 · 페어 말머리 탭 · 검색 · WRITE(모달) · 12개씩 페이지.
-// 말머리·별점 이름은 환경설정 > 게시판 관리 「TRPG 리뷰 말머리」, 글쓰기 권한은 환경설정 「권한」(기본: 가입자).
-// 수정은 쓴 사람·관리자·글쓰기 권한이 있는 회원 — 저장할 때 editorIds에 적고, 옛 글은 관리자가 열 때 채운다
+// TRPG 리뷰 게시판 (v2.1 사용자 요청) — 시나리오마다 인물별 별점 + 한줄평. 3:4 타일 그리드 · 페어 말머리 탭 · 검색 · 12개씩 페이지.
+// 쓰기·수정은 페이지(/treview/write · /treview/[id]/edit). 말머리는 환경설정 > 게시판 관리 「TRPG 리뷰 말머리」,
+// 글쓰기 권한은 환경설정 「권한」(기본: 가입자). 수정은 쓴 사람·관리자·글쓰기 권한이 있는 회원 —
+// 저장할 때 editorIds에 적고, 옛 글은 관리자가 열 때 채운다
 import React, { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { useSectionParam, filterSection, sectionSetter, secStamp, MAIN_SEC } from '@/lib/sectionStore';
-import { useLocalList, newId, fmtDate } from '@/lib/postStore';
+import { useSectionParam, filterSection, MAIN_SEC, secQuery } from '@/lib/sectionStore';
+import { useLocalList, fmtDate } from '@/lib/postStore';
 import {
-  TrpgReview, REVIEW_KEY, REVIEW_SEED, starText, reviewRoles, canWriteReview, reviewEditorIds, sameIdList,
+  TrpgReview, REVIEW_KEY, REVIEW_SEED, starText, ratersOf, raterLabel, reviewSearchText,
+  canWriteReview, reviewEditorIds, sameIdList,
 } from '@/lib/reviewStore';
-import { useBoardSettings, reviewCatsOf, reviewStarsOf, boardBadgeStyle } from '@/lib/boardStore';
+import { useBoardSettings, reviewCatsOf, boardBadgeStyle } from '@/lib/boardStore';
 import { useMenuSettings } from '@/lib/menuStore';
 import { useMembers } from '@/lib/members';
 import { SearchBar, Pager } from '@/components/ui/Kit';
-import { Modal } from '@/components/ui/Modal';
 import { CroppedBlobImg } from '@/components/ui/CropEditor';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
-import { ReviewForm } from '@/components/trpg/ReviewForm';
-import { useToast } from '@/components/ui/Toast';
 
-const PER = 12;   // 4열 × 3줄
+const PER = 12;        // 4열 × 3줄
+const TILE_RATERS = 3; // 타일에 보이는 평가 줄 수 — 넘치면 「외 N명」
 
 function ReviewPageInner() {
   const router = useRouter();
-  const toast = useToast();
   const { user, isAdmin } = useAuth();
   const [all, setAll, loaded] = useLocalList<TrpgReview>(REVIEW_KEY, REVIEW_SEED);
   const sec = useSectionParam('treview');
   const rows = filterSection(all, sec.id);
-  const setRows = sectionSetter(all, sec.id, setAll);
   const [menuSet, , menuLoaded] = useMenuSettings();
   const members = useMembers();
   const { st: boardSet } = useBoardSettings();
   const cats = reviewCatsOf(boardSet, sec.id);
-  const starNames = reviewStarsOf(boardSet);
   const [cat, setCat] = useState('');
   const [q, setQ] = useState('');
   const [page, setPage] = useState(1);
-  const [writeOpen, setWriteOpen] = useState(false);
   useEffect(() => { setPage(1); }, [q, cat]);
 
   /* 수정 가능 회원 채우기 (v2.1) — 서버 규칙은 문서에 적힌 editorIds만 보므로, 관리자가 이 페이지를 열 때
@@ -58,7 +54,7 @@ function ReviewPageInner() {
     .filter(r => isAdmin || r.visibility === 'public' || (r.visibility === 'member' && !!user) || (!!user && r.authorId === user.id))
     .filter(r => !cat || r.category === cat)
     .filter(r => !query || r.title.toLowerCase().includes(query) || r.rule.toLowerCase().includes(query)
-      || r.category.toLowerCase().includes(query) || reviewRoles(r).toLowerCase().includes(query))
+      || r.category.toLowerCase().includes(query) || reviewSearchText(r).toLowerCase().includes(query))
     .sort((a, b) => (b.playDate ?? b.date.slice(0, 10)).localeCompare(a.playDate ?? a.date.slice(0, 10)) || b.date.localeCompare(a.date));
   const pages = Math.max(1, Math.ceil(visible.length / PER));
   const cur = Math.min(page, pages);
@@ -81,18 +77,20 @@ function ReviewPageInner() {
           ))}
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <SearchBar placeholder="시나리오·룰·말머리·캐릭터 검색" onSearch={setQ} />
-          {canWrite && <button className="btn btn-dark" onClick={() => setWriteOpen(true)}>✎ WRITE</button>}
+          <SearchBar placeholder="시나리오·룰·말머리·이름·한줄평 검색" onSearch={setQ} />
+          {canWrite && (
+            <button className="btn btn-dark" onClick={() => router.push('/treview/write' + secQuery('treview', sec.id))}>✎ WRITE</button>
+          )}
         </div>
       </div>
 
       {paged.length > 0 && (
         <div className="rv-grid">
           {paged.map(r => {
-            const roles = reviewRoles(r);
+            const rs = ratersOf(r);
             return (
               <article key={r.id} className="panel tc-card rv-card" onClick={() => router.push(`/treview/${r.id}`)}>
-                {/* 3:4 타일 — 대표 이미지, 없으면 자리표시자 (v2.1 사용자 요청) */}
+                {/* 3:4 타일 — 대표 이미지, 없으면 자리표시자 */}
                 <div className="rv-img">
                   <CroppedBlobImg fileRef={r.thumbId} crop={r.thumbCrop} ph="cool" label={r.thumbId ? undefined : 'REVIEW'} />
                   {r.category && <span className="rv-badge" style={boardBadgeStyle(badgeOf(r.category))}>{r.category}</span>}
@@ -100,11 +98,15 @@ function ReviewPageInner() {
                 <div className="bd">
                   <b className="nm">{r.title}</b>
                   <small className="meta">{[r.rule, r.playDate ? r.playDate.replace(/-/g, '.') : fmtDate(r.date)].filter(Boolean).join(' · ')}</small>
-                  {roles && <small className="meta">{roles}</small>}
-                  <div className="rv-stars">
-                    <span className="s">{r.stars2 !== undefined && starNames.a}<i>{starText(r.stars)}</i></span>
-                    {r.stars2 !== undefined && <span className="s">{starNames.b}<i>{starText(r.stars2)}</i></span>}
-                  </div>
+                  {/* 누가 몇 점을 줬는지 — GM 먼저 */}
+                  {rs.length > 0 && (
+                    <div className="rv-tile-raters">
+                      {[...rs].sort((a, b) => (a.role === b.role ? 0 : a.role === 'GM' ? -1 : 1)).slice(0, TILE_RATERS).map(x => (
+                        <div key={x.id} className="rv-tr"><span className="who">{raterLabel(x)}</span><i>{starText(x.stars)}</i></div>
+                      ))}
+                      {rs.length > TILE_RATERS && <div className="rv-tr more">외 {rs.length - TILE_RATERS}명</div>}
+                    </div>
+                  )}
                 </div>
               </article>
             );
@@ -117,24 +119,6 @@ function ReviewPageInner() {
         </div>
       )}
       {visible.length > PER && <Pager page={cur} total={pages} onChange={setPage} />}
-
-      {/* 글쓰기 — 모달 (별점·한줄 평이라 페이지를 따로 두지 않았다) */}
-      <Modal open={writeOpen} onClose={() => setWriteOpen(false)} title="리뷰 쓰기"
-        desc="시나리오 이름 · 페어 말머리 · 룰 · GM/PC 캐릭터 · 별점 · 대표 이미지 · 한줄 평">
-        {writeOpen && user && (
-          <ReviewForm initial={null} cats={cats} starNames={starNames}
-            onCancel={() => setWriteOpen(false)}
-            onSave={v => {
-              const r: TrpgReview = {
-                id: newId(), ...v, date: new Date().toISOString(), author: user.nickname, authorId: user.id, ...secStamp(sec.id),
-                editorIds: reviewEditorIds(menuSet, sec.id, members),   // 글쓰기 권한이 있는 회원은 서로의 리뷰도 고친다
-              };
-              setRows([r, ...rows]);
-              setWriteOpen(false);
-              toast('리뷰가 등록되었습니다');
-            }} />
-        )}
-      </Modal>
     </section>
   );
 }

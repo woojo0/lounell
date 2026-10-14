@@ -1838,8 +1838,54 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 .rv-card .rv-img .ph{position:absolute;inset:0}
 .rv-card .rv-badge{position:absolute;left:8px;top:8px;z-index:2}
 .rv-card .bd .rv-stars{justify-content:flex-start;gap:6px 10px;margin-top:6px}
-.rv-detail-panel{display:grid;grid-template-columns:1fr;gap:18px;align-items:start}
+.rv-detail-panel{display:grid;grid-template-columns:1fr;gap:26px;align-items:start;padding:26px;max-width:960px;margin:0 auto}
 .rv-detail-panel:has(.rv-detail-img){grid-template-columns:280px 1fr}
+/* 상세 오른쪽 — 시나리오 정보 아래 GM 평점 · PC 평점을 나눠서, 사람마다 「이름 ★★★★☆」 아래 한줄평 (v2.1 사용자 요청) */
+.rv-d-title{font-size:calc(19px*var(--fs,1));display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:0}
+.rv-d-meta{font-size:calc(12px*var(--fs,1));color:var(--sub);margin-top:5px}
+.rv-d-group{margin-top:22px;display:grid;gap:14px}
+.rv-d-role{font-size:calc(11px*var(--fs,1));font-weight:700;letter-spacing:.14em;color:var(--sub);padding-bottom:7px;border-bottom:1px solid var(--line)}
+.rv-d-rater{display:grid;gap:6px}
+.rv-d-rater .hd{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rv-d-rater .hd b{font-size:calc(14px*var(--fs,1))}
+.rv-d-rater .st{display:inline-flex;align-items:center;gap:6px;font-size:calc(11px*var(--fs,1));color:var(--sub);white-space:nowrap}
+.rv-d-rater .st i{font-style:normal;color:#e0a92f;letter-spacing:.06em;font-size:calc(14px*var(--fs,1))}
+.rv-d-rater .tx{margin:0;font-size:calc(13.5px*var(--fs,1));line-height:1.8;white-space:pre-wrap;word-break:break-word;padding-left:12px;border-left:2px solid var(--line)}
+/* 목록 타일 — 누가 몇 점을 줬는지 (GM 먼저, 넘치면 「외 N명」) */
+.rv-tile-raters{display:grid;gap:2px;margin-top:7px}
+.rv-tr{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:calc(11px*var(--fs,1));color:var(--sub);min-width:0}
+.rv-tr .who{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-tr i{font-style:normal;color:#e0a92f;letter-spacing:.04em;white-space:nowrap;flex-shrink:0}
+.rv-tr.more{color:var(--faint)}
+/* 리뷰 쓰기/수정 페이지 (v2.1 사용자 요청 — 모달 대신 페이지로, 시원시원하게) */
+.rv-form{max-width:880px;margin:0 auto;padding:30px 34px;display:grid;gap:26px}
+.rv-form .rv-f-title{font-size:calc(16px*var(--fs,1));font-weight:700;padding:12px 14px}
+.rv-f-row{display:flex;gap:16px 22px;flex-wrap:wrap;align-items:flex-start}
+.rv-f-field{min-width:150px}
+.rv-f-field.grow{flex:1;min-width:200px}
+.rv-f-media{display:grid;grid-template-columns:150px 1fr;gap:26px;align-items:start}
+.rv-f-thumb{width:150px;aspect-ratio:3/4;border-radius:var(--radius-s);border:1.5px dashed var(--line);display:grid;place-items:center;text-align:center;color:var(--faint);font-size:calc(12px*var(--fs,1));cursor:var(--cur-pointer,pointer);position:relative;overflow:hidden;transition:border-color .15s}
+.rv-f-thumb:hover{border-color:var(--accent)}
+.rv-f-thumb.has{border-style:solid}
+.rv-f-thumb .ph{position:absolute;inset:0}
+.rv-f-thumb span small{display:block;font-size:calc(10.5px*var(--fs,1));margin-top:4px}
+.rv-f-thumb-acts{display:flex;gap:6px;margin-top:8px}
+.rv-f-thumb-acts .btn{padding:5px 10px;font-size:calc(10.5px*var(--fs,1))}
+.rv-f-side{display:grid;gap:18px;align-content:start}
+.rv-raters{display:grid;gap:12px}
+.rv-rater{border:1px solid var(--line);border-radius:var(--radius-s);padding:14px 16px;display:grid;gap:10px}
+.rv-rater-hd{display:flex;align-items:center;gap:10px 12px;flex-wrap:wrap}
+.rv-rater-hd .rv-rater-name{width:220px;max-width:100%}
+.rv-rater-del{margin-left:auto;padding:4px 10px;font-size:calc(11px*var(--fs,1))}
+.rv-add{margin-top:12px}
+.rv-f-foot{display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--line);padding-top:18px}
+@media(max-width:620px){
+  .rv-form{padding:20px 16px;gap:22px}
+  .rv-f-media{grid-template-columns:110px 1fr;gap:16px}
+  .rv-f-thumb{width:110px}
+  .rv-rater-hd .rv-rater-name{width:100%;order:3}
+  .rv-detail-panel{padding:18px}
+}
 .rv-detail-img{position:relative;aspect-ratio:3/4;border-radius:var(--radius-s);overflow:hidden}
 .rv-detail-img .ph{position:absolute;inset:0}
 @media(max-width:720px){.rv-detail-panel:has(.rv-detail-img){grid-template-columns:1fr}.rv-detail-img{max-width:280px}}

@@ -661,7 +661,7 @@ function BoardPane() {
     patchVideoCat, addVideoCat, removeVideoCat, setVideoCats,
     patchFeedCat, addFeedCat, removeFeedCat, setFeedCats, setFeedHideAuthor,
     patchRoadCat, addRoadCat, removeRoadCat, setRoadCats,
-  setPerPage, patchReviewCat, addReviewCat, removeReviewCat, setReviewCats, setReviewStars,
+  setPerPage, patchReviewCat, addReviewCat, removeReviewCat, setReviewCats,
   } = useBoardSettings();
   const { boards, setBoards, patchBoard } = useBoards();
   const [catBoard, setCatBoard] = useState(MAIN_BOARD_ID);   // 말머리 편집 대상 게시판
@@ -905,18 +905,11 @@ function BoardPane() {
           extra: null as React.ReactNode,
         },
         {
-          // TRPG 리뷰 (v2.1 사용자 요청) — 페어별 말머리 + 둘이 따로 매기는 별점의 이름
+          // TRPG 리뷰 (v2.1 사용자 요청) — 페어별 말머리. 별점은 글마다 인물별로 이름을 적으므로 「별점 이름」 칸은 없앴다
           title: 'TRPG 리뷰 말머리 (페어)', desc: 'TRPG 리뷰를 쓸 때 고르는 말머리 — 누구와 했는지(페어)별로 모아 봅니다 · 하나도 없으면 말머리 없이 씁니다',
           secs: reviewSecs, sec: reviewSec, setSec: setReviewSec, cats: reviewCatsOf(st, reviewSec),
           set: setReviewCats, patch: patchReviewCat, add: addReviewCat, remove: removeReviewCat,
-          extra: (
-            <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              <span className="cp-lb">별점 이름</span>
-              <KInput value={st.reviewStars?.a ?? ''} placeholder="별점 1 (예: 푸딩)" onChange={e => setReviewStars({ a: e.target.value })} style={{ width: 150 }} />
-              <KInput value={st.reviewStars?.b ?? ''} placeholder="별점 2 (예: 곰주)" onChange={e => setReviewStars({ b: e.target.value })} style={{ width: 150 }} />
-              <small className="hint" style={{ margin: 0 }}>둘이 따로 매길 때 각 별점 앞에 붙는 이름</small>
-            </div>
-          ),
+          extra: null as React.ReactNode,
         },
       ]).map(blk => (
         <React.Fragment key={blk.title}>

@@ -138,7 +138,11 @@ function imsgRows(msgs: RpMessage[], chars: Character[], opts: RpLogOpts): strin
     if (m.rp) {
       const c = chars.find(x => x.id === m.charId);
       const hex = safeHex(c?.color);
-      rows.push(`<div class="m${!opts.neutralSides && me ? ' me' : ''}" data-c="${esc(m.charId ?? '')}" data-i="${i}" style="--c:${hex};--rgb:${hexRgb(hex)}"><div class="who"><span>${esc(nameOf(chars, m.charId))}</span></div><div class="txt">${esc(txt)}</div></div>`);   // 메신저 로그 안의 「일반 RP」 카드에는 사진을 넣지 않는다 (사용자 확정 — 말풍선에만)
+      // 같은 캐릭터가 이어 말했으면 이름 줄 없이 (역극 방과 같은 규칙 — 커플홈 사용자 요청 「로그도 똑같이」)
+      const pv = msgs[i - 1];
+      const cont = !!pv && pv.kind === 'char' && !!m.charId && pv.charId === m.charId;
+      const who = cont ? '' : `<div class="who"><span>${esc(nameOf(chars, m.charId))}</span></div>`;
+      rows.push(`<div class="m${cont ? ' cont' : ''}${!opts.neutralSides && me ? ' me' : ''}" data-c="${esc(m.charId ?? '')}" data-i="${i}" style="--c:${hex};--rgb:${hexRgb(hex)}">${who}<div class="txt">${esc(txt)}</div></div>`);   // 메신저 로그 안의 「일반 RP」 카드에는 사진을 넣지 않는다 (사용자 확정 — 말풍선에만)
       return;
     }
     const prev = msgs[i - 1], next = msgs[i + 1];
@@ -235,19 +239,28 @@ ${imsgRows(msgs, chars, opts).join('\n')}
   }
   const rows: string[] = [];
   let day = '';
+  // 바로 앞 줄이 캐릭터 발화면 그 캐릭터 id — 같은 캐릭터가 이어 말하면 얼굴·이름은 묶음 첫 줄에만 (커플홈 사용자 요청 —
+  // 「로그도 똑같이」, 역극 방의 대본 모양과 같은 규칙). 지문이나 날짜 줄이 끼면 다시 적는다. 시각은 줄마다 그대로
+  let prevChar: string | null = null;
   // data-i = 발화 번호 — RP LOG 상세의 편집모드가 호버·우클릭한 발화를 알아보는 데 쓴다 (커플홈)
   msgs.forEach((m, i) => {
     if (opts.time) {
       const d = ymd(m.date);
-      if (d !== day) { day = d; rows.push(`<div class="day">${d}</div>`); }
+      if (d !== day) { day = d; rows.push(`<div class="day">${d}</div>`); prevChar = null; }
     }
     const t = opts.time ? `<span class="t">${hm(m.date)}</span>` : '';
     if (m.kind === 'char') {
       const c = chars.find(x => x.id === m.charId);
       const hex = safeHex(c?.color);
-      rows.push(`<div class="m" data-c="${esc(m.charId ?? '')}" data-i="${i}" style="--c:${hex};--rgb:${hexRgb(hex)}"><div class="who">${faceTag(opts, m.charId)}<span>${esc(nameOf(chars, m.charId))}</span>${t}</div><div class="txt">${esc(m.text || (m.imgId ? '[사진]' : ''))}</div></div>`);
+      const cont = !!m.charId && prevChar === m.charId;
+      const who = cont
+        ? (t ? `<div class="who">${t}</div>` : '')
+        : `<div class="who">${faceTag(opts, m.charId)}<span>${esc(nameOf(chars, m.charId))}</span>${t}</div>`;
+      rows.push(`<div class="m${cont ? ' cont' : ''}" data-c="${esc(m.charId ?? '')}" data-i="${i}" style="--c:${hex};--rgb:${hexRgb(hex)}">${who}<div class="txt">${esc(m.text || (m.imgId ? '[사진]' : ''))}</div></div>`);
+      prevChar = m.charId ?? null;
     } else {
       rows.push(`<div class="d" data-i="${i}">${t}${esc(m.text || (m.imgId ? '[사진]' : ''))}</div>`);
+      prevChar = null;
     }
   });
   const meta = opts.noMeta ? '' : [rpLogRange(msgs), `대화 ${msgs.length}개`].filter(Boolean).join(' · ');
@@ -274,6 +287,7 @@ body{margin:0;background:#f7f7f5;color:#2a2d33;font-family:'Pretendard','Noto Sa
 .d{margin:18px 6%;text-align:center;color:#50555e;line-height:1.85;white-space:pre-wrap;word-break:break-word}
 .t{font-size:10px;font-weight:400;color:#a3a7ae;margin-left:8px;letter-spacing:.02em}
 .d .t{display:block;margin:0 0 2px}
+.m.cont .t{margin-left:0}
 </style>
 </head>
 <body>
@@ -295,12 +309,51 @@ export function fixLegacyImsgCss(html: string): string {
     .replace('\n.b.me .f{display:none}', '');
 }
 
+/* 이미 올린 로그의 줄 — 이 홈이 만든 역극 로그의 줄 머리만 (지문·날짜·안내 줄 | 메신저 말풍선 | 캐릭터 카드 + 이름 줄).
+   글은 esc로 꺾쇠가 바뀌어 있어 본문 안에 `<div class="`가 나올 수 없다 */
+const LOG_ROW_RE = /<div class="(?:d|day|sys)(?: [^"]*)?"|<div class="b(?: [^"]*)?"([^>]*)>|<div class="m((?: [^"]*)?)"([^>]*)><div class="who">([\s\S]*?)<\/div>/g;
+/** 이 홈의 역극 로그인가 — 처음 판부터 지금까지 같은 틀(.log)과 카드 이름 줄 CSS */
+const isOurRpLog = (html: string) =>
+  html.includes('<div class="log">') && html.includes('.m .who{font-size:12px;font-weight:700;color:var(--c);letter-spacing:.05em;margin-bottom:3px');
+
+/** 이미 올린 역극 로그도 같은 캐릭터가 이어 말한 카드는 얼굴·이름 없이 (커플홈 사용자 요청 — 「로그도 똑같이 바꿔줘」).
+ *  본문 HTML에 모양이 박혀 있어 다시 올리지 않으면 안 바뀌므로, 상세에서 그릴 때 이 홈이 만든 로그만 골라 고쳐 끼운다.
+ *  같은 화자는 캐릭터 id(data-c)로, 그게 없는 10.8 이전 로그는 이름과 테마색으로 알아본다. 시각은 남긴다.
+ *  새로 만든 로그(rpLogHtml)는 이미 묶여 있어 그대로 지나간다 */
+export function groupLogRows(html: string): string {
+  if (!isOurRpLog(html)) return html;
+  let prev: string | null = null;
+  let changed = false;
+  const out = html.replace(LOG_ROW_RE, (s: string, bAttrs?: string, mCls?: string, mAttrs?: string, who?: string) => {
+    if (bAttrs !== undefined) {   // 메신저 말풍선 — 묶음의 앞 줄로만 센다 (id가 없는 옛 말풍선은 끊는다)
+      const c = / data-c="([^"]*)"/.exec(bAttrs)?.[1];
+      prev = c ? `c:${c}` : null;
+      return s;
+    }
+    if (mAttrs === undefined || who === undefined) { prev = null; return s; }   // 지문·날짜·안내 줄
+    const c = / data-c="([^"]*)"/.exec(mAttrs)?.[1];
+    const time = /<span class="t">[^<]*<\/span>/.exec(who)?.[0] ?? '';
+    const name = who.replace(/<span class="f">(?:<img[^>]*>)?<\/span>/, '').replace(time, '').replace(/<\/?span>/g, '').trim();
+    const color = /--c:([^;"]*)/.exec(mAttrs)?.[1] ?? '';
+    const key = c ? `c:${c}` : `n:${name}|${color}`;
+    const cls = mCls ?? '';
+    const cont = !/(^| )cont( |$)/.test(cls) && prev === key;
+    prev = key;
+    if (!cont) return s;
+    changed = true;
+    return `<div class="m${cls} cont"${mAttrs}>${time ? `<div class="who">${time}</div>` : ''}`;
+  });
+  // 시각만 남은 이름 줄 — 이름 뒤에 붙던 왼쪽 띄움을 뺀다 (새 로그는 CSS에 이미 있다)
+  return changed ? out.replace('</style>', '.m.cont .t{margin-left:0}\n</style>') : out;
+}
+
 /** 좌우를 안 정한 메신저 본문(neutralSides)에 보는 사람 기준으로 me/them을 붙인다 (커플홈 사용자 요청 —
  *  RP LOG 게시판에서는 관리자에게는 자캐가, 역극 참여 회원에게는 자기 캐릭터가 오른쪽).
- *  이미 좌우가 있는 본문(파일 저장본·옛 로그)은 data-c가 없어 그대로다 */
+ *  이미 좌우가 있는 본문(파일 저장본·옛 로그)은 data-c가 없어 그대로다.
+ *  같은 캐릭터가 이어 말한 카드 묶기(groupLogRows)도 여기서 — 상세가 HTML 본문을 그리기 직전에 늘 거치는 곳 */
 export function applyLogSides(html: string, rightIds: string[]): string {
   const right = new Set(rightIds);
-  return fixLegacyImsgCss(html)
+  return groupLogRows(fixLegacyImsgCss(html))
     .replace(/<div class="b([^"]*)" data-c="([^"]*)"/g, (_s, cls: string, id: string) =>
       `<div class="b${cls} ${right.has(id) ? 'me' : 'them'}" data-c="${id}"`)
     .replace(/<div class="m([^"]*)" data-c="([^"]*)"/g, (_s, cls: string, id: string) =>

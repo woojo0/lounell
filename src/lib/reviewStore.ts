@@ -9,7 +9,7 @@ import type { MenuSettings } from './menuStore';
 import { canWriteAt, writeKeyOf } from './menuStore';
 import type { MemberLite } from './members';
 
-/** 인물별 평가 한 사람 (v2.1 사용자 요청 — 「GM 무무 ★★★★☆ / 무무 한줄평: …」, 누가 매긴 별점인지 보이게) */
+/** 인물별 평가 한 사람 (v2.1 사용자 요청 — 「GM 이름 ★★★★☆ / 이름 한줄평: …」, 누가 매긴 별점인지 보이게) */
 export interface ReviewRater {
   id: string;
   role: 'GM' | 'PC';
@@ -85,7 +85,7 @@ export function ratersOf(r: TrpgReview): ReviewRater[] {
   return out;
 }
 
-/** 「GM 무무」 — 이름이 없으면 롤만 */
+/** 「GM 이름」 — 이름이 없으면 롤만 */
 export const raterLabel = (x: Pick<ReviewRater, 'role' | 'name'>): string =>
   x.name.trim() ? `${x.role} ${x.name.trim()}` : x.role;
 

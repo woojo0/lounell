@@ -636,6 +636,7 @@ export default function RpPage() {
                     : (!!m.charOwn && isAdmin);
                   // 이름은 말하는 캐릭터가 바뀔 때만 (사용자 확정): 같은 캐릭터가 이어 말하면 묶음의 첫 줄에만 적는다.
                   // 기본(대본) 방도 마찬가지 (v2.1 사용자 요청 — 예전엔 메신저 방만 이랬고 기본 방은 줄마다 적었다). 지문이 끼면 다시 적는다.
+                  // 기본 방은 얼굴도 같은 줄에만 (커플홈 사용자 요청) — 아래 nameNeeded를 얼굴에도 쓴다
                   // 화면에 그린 순서(arr) 기준이라 「위로/아래로 보내기」로 순서를 바꾸면 바뀐 순서대로 다시 묶인다
                   const prevMsg = arr[mi - 1];
                   const nameNeeded = !prevMsg || prevMsg.kind !== 'char' || prevMsg.charId !== m.charId;
@@ -675,13 +676,15 @@ export default function RpPage() {
                   }
                   return (
                     <div key={m.id} className={`msg ${rightSide ? 'me' : ''}`} style={{ ['--cc' as string]: hexRgb(ch?.color) }} onContextMenu={e => openMsgCtx(e, m)}>
-                      {/* 메신저 방의 일반 RP: 내 글은 얼굴 없이(내 말풍선처럼 오른쪽 끝 맞춤), 상대 글은 묶음 끝에만 얼굴 —
+                      {/* 기본(대본) 방: 얼굴도 이름처럼 묶음의 첫 줄에만 (커플홈 사용자 요청 — 「이름만 한 번으로 생략하는 게 아니고
+                          이미지도 한 번으로」). 이어지는 줄은 얼굴 폭만큼 빈자리를 두어 말풍선 줄이 그대로 맞는다.
+                          메신저 방의 일반 RP: 내 글은 얼굴 없이(내 말풍선처럼 오른쪽 끝 맞춤), 상대 글은 묶음 끝에만 얼굴 —
                           이어지는 글은 빈자리만 두어 말풍선 출발선이 문자 말풍선과 같게 (사용자 확정) */}
                       {!imsg
-                        ? <Face ch={ch} crop={faceOf(ch)} className="face" />
+                        ? (nameNeeded ? <Face ch={ch} crop={faceOf(ch)} className="face" /> : <span className="face spacer" />)
                         : !rightSide && (runEnd ? <Face ch={ch} crop={faceOf(ch)} className="face" /> : <span className="face spacer" />)}
                       <div>
-                        {/* 이름은 말하는 캐릭터가 바뀔 때만 — 기본 방도, 메신저 방의 일반 RP 글도 (얼굴은 기본 방에서 줄마다 그대로) */}
+                        {/* 이름은 말하는 캐릭터가 바뀔 때만 — 기본 방도, 메신저 방의 일반 RP 글도 */}
                         {nameNeeded && <div className="who">{name}</div>}
                         <div className="bub">
                           {m.imgId && <div className="rp-pic" onClick={() => setLbImg(m.imgId!)}><BlobImg fileRef={m.imgId} ph="" label="" /></div>}

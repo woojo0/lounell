@@ -60,6 +60,10 @@ function KeepThumb({ id, onRemove }: { id: string; onRemove: () => void }) {
   );
 }
 
+/** 긴 타래 — 처음에 보이는 최신 글 수 · 「이전 글 더보기」 한 번에 더 보이는 수 (커플홈 사용자 요청) */
+const THR_SHOW = 20;
+const THR_MORE = 20;
+
 /** 타래 글 이미지 — 1장=와이드, 2~4장=격자 (4.17) · 클릭 시 확대 보기 */
 function PostImgs({ p, onOpen }: { p: ThreadPost; onOpen: (ids: string[], idx: number) => void }) {
   const ids = p.images.length ? p.images : [];
@@ -173,6 +177,12 @@ function ThreadsPageInner() {
     .sort((a, b) => lastDate(b, postRows).localeCompare(lastDate(a, postRows))), [works, isAdmin, user, cat, q, postRows]);
 
   const sel = visible.find(w => w.id === selId) ?? visible[0];
+  /* 긴 타래는 최신 글만 (커플홈 사용자 요청 — 「20개 이상 길어지면 윗부분을 더보기로 줄이고 최신만, 전체보기 버튼도」).
+     처음엔 최근 THR_SHOW개, 「이전 글 더보기」마다 THR_MORE개씩 더, 「전체보기」는 전부(그 뒤로 새 글이 붙어도 전부).
+     펼친 수는 그 타래에만 붙어 있어서 다른 타래를 열면 다시 최신만 */
+  const [thrShow, setThrShow] = useState<{ id?: string; n: number }>({ n: THR_SHOW });
+  const thrShown = thrShow.id === sel?.id ? thrShow.n : THR_SHOW;
+  const setThrShown = (n: number) => setThrShow({ id: sel?.id, n });
 
   // 댓글 — 글과 따로 저장 (v2.0 사용자 요청, 게시판·로드비와 같은 컬렉션을 target으로 나눠 쓴다)
   const [cmtRows, setCmtRows] = useLocalList<CommentRow>(COMMENT_KEY, COMMENT_SEED);
@@ -470,7 +480,23 @@ function ThreadsPageInner() {
                   </div>
                 </div>
                 <div className="thr-body">
-                  {postsOfW(sel).map(p => {
+                  {(() => {
+                    const total = postsOfW(sel).length;
+                    const hidden = Math.max(0, total - thrShown);
+                    if (hidden > 0) return (
+                      <div className="thr-more">
+                        <button className="btn btn-ghost rp-more" onClick={() => setThrShown(thrShown + THR_MORE)}>이전 글 더보기 ({hidden})</button>
+                        <button className="btn btn-ghost rp-more" onClick={() => setThrShown(Infinity)}>전체보기</button>
+                      </div>
+                    );
+                    if (total > THR_SHOW) return (
+                      <div className="thr-more">
+                        <button className="btn btn-ghost rp-more" onClick={() => setThrShown(THR_SHOW)}>최신 글만 보기</button>
+                      </div>
+                    );
+                    return null;
+                  })()}
+                  {postsOfW(sel).slice(-thrShown).map(p => {
                     const folded = !!p.fold && !openFolds.has(p.id);
                     return (
                       <div key={p.id} className="thr-post">

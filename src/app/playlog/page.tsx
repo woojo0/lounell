@@ -10,6 +10,7 @@ import { PlayRecord, PLAYLOG_SEED } from '@/lib/galleryStore';
 import { Character, CHAR_SEED, Relation, REL_SEED } from '@/lib/charStore';
 import { TrpgChar, TCHAR_SEED } from '@/lib/tcharStore';
 import { playCharView, PlayCharView } from '@/lib/playChar';
+import { playStats, fmtPlayMinutes } from '@/lib/playtime';
 import { useMenuSettings, canWriteAt, writeKeyOf } from '@/lib/menuStore';
 import { useMainStore } from '@/lib/mainStore';
 import { useCardSort, mergeOrder } from '@/lib/cardSort';
@@ -89,6 +90,8 @@ function PlaylogPageInner() {
     return desc ? b.date.localeCompare(a.date) : a.date.localeCompare(b.date);
   });
   const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  // 합계 (커플홈 사용자 요청) — 몇 번 갔는지 · 플레이타임 합. 검색 중이면 검색 결과 전체, 아니면 이 목록 전체 (페이지와 상관없이)
+  const stats = playStats(filtered);
   // 편집모드: 저장 순서 전체 표시 (드래그 인덱스와 1:1 매칭)
   const shown = editOn ? records : sorted.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -195,6 +198,15 @@ function PlaylogPageInner() {
       <div style={{ marginTop: 14, display: 'flex', justifyContent: 'center' }}>
         {!editOn && <Pager page={page} total={totalPages} onChange={setPage} />}
       </div>
+
+      {/* 맨 아래 합계 — 「5H 30M」처럼 적은 플레이타임을 시간+분으로 더한다 (소문자·4.5h·4:30·4시간 30분도 읽는다) */}
+      {records.length > 0 && (
+        <div className="pl-stats">
+          <span><b>COUNT</b>{stats.count}</span>
+          <span><b>PLAYTIME</b>{stats.minutes || stats.count > stats.unread ? fmtPlayMinutes(stats.minutes) : '—'}</span>
+          {stats.unread > 0 && <small>시간을 못 읽은 기록 {stats.unread}건은 빼고 더했습니다 (예: 5H 30M)</small>}
+        </div>
+      )}
 
       <ConfirmModal open={delFor !== null} title="기록을 삭제하시겠습니까?"
         body={`"${delFor?.scenario}" — 삭제하면 복구할 수 없습니다.`}

@@ -8,6 +8,7 @@ import type { CropValue } from '@/components/ui/CropEditor';
 import type { MenuSettings } from './menuStore';
 import { canWriteAt, writeKeyOf } from './menuStore';
 import type { MemberLite } from './members';
+import { logPath } from './galleryStore';
 
 /** 인물별 평가 한 사람 (v2.1 사용자 요청 — 「GM 이름 ★★★★☆ / 이름 한줄평: …」, 누가 매긴 별점인지 보이게) */
 export interface ReviewRater {
@@ -37,6 +38,8 @@ export interface TrpgReview {
   visibility: Visibility;
   /** 수정할 수 있는 회원 — 저장할 때 이 게시판에 글쓰기 권한이 있는 회원 전원을 적는다 (서버 규칙이 이 목록을 본다) */
   editorIds?: string[];
+  /** 연결한 로그 (v2.1 사용자 요청) — 등록된 로그 또는 주소, 여러 개 */
+  logs?: ReviewLogLink[];
   /* ---- 옛 칸 (v2.1 처음 판 — 별점 둘 · 본문 하나 · GM/PC 이름 또는 롤 선택). 새로 저장하면 raters로 옮기고 지운다 ---- */
   gm?: string;
   pc?: string;
@@ -116,3 +119,86 @@ export const canEditReview = (r: Pick<TrpgReview, 'authorId' | 'editorIds'>, isA
 /** 같은 회원 목록인가 (순서 무관) — 바뀐 문서만 다시 쓰려고 */
 export const sameIdList = (a: string[] | undefined, b: string[]) =>
   !!a && a.length === b.length && b.every(x => a.includes(x));
+
+/* ---------- 로그 연결 (v2.1 사용자 요청 — 이미 등록된 로그를 고르거나 주소를 넣는다, 여러 개) ---------- */
+
+/** 리뷰에 붙인 로그 하나 — 등록된 로그(logId) 또는 주소(url) */
+export interface ReviewLogLink {
+  id: string;
+  /** 이 홈의 로그 백업에 등록된 로그 */
+  logId?: string;
+  /** 고를 때의 제목·주소·전체공개 여부 — 보는 사람의 로그 목록에 그 로그가 없을 때(목록에서 숨긴 로그) 대신 쓴다.
+   *  제목·주소는 고를 때 전체공개였던 로그만 적어 둔다 — 리뷰 문서는 리뷰를 볼 수 있는 사람 누구에게나 내려가므로,
+   *  화면에서 숨기는 것만으로는 비공개·멤버공개 로그의 제목이 문서째 새어 나간다 (이 홈에서 고침) */
+  title?: string;
+  path?: string;
+  pub?: boolean;
+  /** 바깥 주소 또는 이 홈 안의 주소(/…) */
+  url?: string;
+  /** 주소에 붙일 이름 (선택) */
+  label?: string;
+}
+
+/** 로그 번호 표기 — 직접 적은 번호, 없으면 LOG 012 */
+export const logNoLabel = (l: { no: number; noText?: string }): string =>
+  l.noText?.trim() || `LOG ${String(l.no).padStart(3, '0')}`;
+
+/** 등록된 로그로 붙이기 — 전체공개 로그면 제목·주소도 적어 두고, 아니면 로그 id만 (위 ReviewLogLink 주석) */
+export const logLinkOf = (l: { id: string; slug?: string; title: string; visibility: string }, id: string): ReviewLogLink =>
+  l.visibility === 'public'
+    ? { id, logId: l.id, title: l.title, path: logPath(l), pub: true }
+    : { id, logId: l.id, pub: false };
+
+/** 이 홈 안의 주소인가 — 「/」로 시작하되 「//」·「/\」(브라우저가 바깥 주소로 읽는다)·공백·역슬래시는 안 된다 */
+export const isInternalPath = (s: string): boolean => /^\/(?![/\\])[^\s\\]*$/.test(s);
+
+/** 주소 다듬기 — http(s) 주소나 이 홈 안의 주소(/…)만 받는다. 도메인만 적었으면 https:// 를 붙인다 */
+export function normalizeLinkUrl(raw: string): string | null {
+  const s = raw.trim();
+  if (!s) return null;
+  if (isInternalPath(s)) return s;
+  if (/^https?:\/\/[^\s]+$/i.test(s)) return s;
+  if (/^[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(s)) return `https://${s}`;
+  return null;
+}
+
+/** 이 홈의 로그 주소(/log/{id 또는 별명} — 옛 /trpg/… 주소도)면 그 로그 — 주소로 넣어도 등록된 로그로 붙인다 */
+export function logFromUrl<T extends { id: string; slug?: string }>(url: string, logs: T[]): T | undefined {
+  try {
+    const u = new URL(url, window.location.origin);
+    if (u.origin !== window.location.origin) return undefined;
+    const m = u.pathname.match(/^\/(?:log|trpg)\/([^/]+)\/?$/);   // RP LOG 주소 (옛 /trpg/…는 /log/…로 넘겨 주므로 같이 받는다)
+    if (!m) return undefined;
+    const key = decodeURIComponent(m[1]);
+    return logs.find(l => l.id === key || l.slug === key);
+  } catch { return undefined; }
+}
+
+export const prettyUrl = (u: string): string => u.replace(/^https?:\/\//i, '').replace(/\/$/, '');
+
+/** 상세에 보여 줄 로그 줄 — 보는 사람이 볼 수 없는 로그는 뺀다 */
+export interface ReviewLinkView { id: string; tag: string; text: string; sub?: string; href: string; external: boolean }
+export function reviewLinkViews(
+  links: ReviewLogLink[] | undefined,
+  logs: { id: string; slug?: string; title: string; no: number; noText?: string }[],
+  isAdmin: boolean,
+): ReviewLinkView[] {
+  const out: ReviewLinkView[] = [];
+  for (const x of links ?? []) {
+    if (x.logId) {
+      const l = logs.find(y => y.id === x.logId);
+      if (l) out.push({ id: x.id, tag: logNoLabel(l), text: l.title, href: logPath(l), external: false });
+      // 목록에 없는 로그 — 관리자에게 없으면 지워진 것, 회원에게 없으면 목록에서 숨겼거나 볼 수 없는 것 (고를 때 전체공개였던 것만)
+      else if (!isAdmin && x.pub && x.path && isInternalPath(x.path)) out.push({ id: x.id, tag: 'LOG', text: x.title || '로그', href: x.path, external: false });
+      continue;
+    }
+    if (!x.url) continue;
+    const internal = isInternalPath(x.url);
+    if (!internal && !/^https?:\/\//i.test(x.url)) continue;   // 저장된 값도 다시 거른다 (javascript: 등)
+    out.push({
+      id: x.id, tag: internal ? 'PAGE' : 'URL', text: x.label?.trim() || prettyUrl(x.url),
+      sub: x.label?.trim() ? prettyUrl(x.url) : undefined, href: x.url, external: !internal,
+    });
+  }
+  return out;
+}

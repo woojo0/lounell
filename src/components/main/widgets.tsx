@@ -78,7 +78,11 @@ export function BannerWidget({ conf }: { conf: WidgetConf }) {
               : <div className={`ph ${sl.cls ?? ''}`} style={{ position: 'absolute', inset: 0 }}><span>SLIDE BANNER {String(i + 1).padStart(2, '0')}</span></div>}
         </div>
       ))}
-      <div className="cap"><b style={capColor ? { color: capColor } : undefined}>{s.cap}</b><span style={subColor ? { color: subColor } : undefined}>{s.sub}</span></div>
+      {/* 글자색 — 이 슬라이드에 정한 색, 없으면 배너 기본색, 그것도 없으면 CSS 기본 (v2.1 사용자 요청 — 이미지마다 따로) */}
+      <div className="cap">
+        <b style={s.capColor || capColor ? { color: s.capColor || capColor } : undefined}>{s.cap}</b>
+        <span style={s.subColor || subColor ? { color: s.subColor || subColor } : undefined}>{s.sub}</span>
+      </div>
       <div className="dots" onClick={e => e.stopPropagation()}>
         {slides.map((sl, i) => (
           <i key={sl.id} className={i === Math.min(cur, slides.length - 1) ? 'on' : ''} onClick={() => setCur(i)} />

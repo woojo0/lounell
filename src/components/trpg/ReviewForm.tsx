@@ -12,7 +12,9 @@ import { useMembers } from '@/lib/members';
 import { useBoardSettings, reviewCatsOf } from '@/lib/boardStore';
 import {
   TrpgReview, ReviewRater, REVIEW_KEY, REVIEW_SEED, ratersOf, canWriteReview, canEditReview, reviewEditorIds,
+  ReviewLogLink, logLinkOf, logNoLabel, normalizeLinkUrl, logFromUrl, prettyUrl,
 } from '@/lib/reviewStore';
+import { TrpgLog, TRPG_SEED } from '@/lib/galleryStore';
 import { KInput, KSelect, KDate, KTextarea } from '@/components/ui/Kit';
 import { CropEditor, CropImg, CroppedBlobImg, type CropValue } from '@/components/ui/CropEditor';
 import { putBlob, useBlobUrl } from '@/lib/blobStore';
@@ -78,6 +80,13 @@ export function ReviewForm({ initial }: { initial: TrpgReview | null }) {
     return r.length ? r.map(x => ({ ...x })) : [blankRater('GM'), blankRater('PC')];
   });
   const [busy, setBusy] = useState(false);
+  // 로그 연결 (v2.1 사용자 요청) — 이미 등록된 로그를 고르거나 주소를 넣는다, 여러 개
+  const [logs] = useLocalList<TrpgLog>('ohome.trpg.v1', TRPG_SEED);
+  const [links, setLinks] = useState<ReviewLogLink[]>(() => (initial?.logs ?? []).map(x => ({ ...x })));
+  const [linkMode, setLinkMode] = useState<'log' | 'url'>('log');
+  const [logQ, setLogQ] = useState('');
+  const [urlIn, setUrlIn] = useState('');
+  const [urlLabel, setUrlLabel] = useState('');
 
   const head = (msg: string) => (
     <section className="page">
@@ -94,6 +103,29 @@ export function ReviewForm({ initial }: { initial: TrpgReview | null }) {
   const patchRater = (id: string, p: Partial<ReviewRater>) => setRaters(rs => rs.map(x => (x.id === id ? { ...x, ...p } : x)));
   const backHref = initial ? `/treview/${initial.id}` : tt.href;
 
+  // 로그 연결 — 고르기는 눌러서 붙였다 뗐다, 주소는 이 홈의 로그 주소면 등록된 로그로 붙인다
+  const linkedLog = (id: string) => links.some(x => x.logId === id);
+  const toggleLog = (l: TrpgLog) => setLinks(ls => (ls.some(x => x.logId === l.id)
+    ? ls.filter(x => x.logId !== l.id)
+    : [...ls, logLinkOf(l, newId())]));
+  const addUrl = () => {
+    const u = normalizeLinkUrl(urlIn);
+    if (!u) { toast('주소는 http:// 나 https:// 로 시작하거나, 이 홈 안의 주소(/로 시작)여야 합니다'); return; }
+    const l = logFromUrl(u, logs);
+    if (l) {
+      if (!linkedLog(l.id)) setLinks(ls => [...ls, logLinkOf(l, newId())]);
+      toast('이 홈의 로그 주소라 등록된 로그로 붙였습니다');
+    } else {
+      setLinks(ls => [...ls, { id: newId(), url: u, label: urlLabel.trim() || undefined }]);
+    }
+    setUrlIn(''); setUrlLabel('');
+  };
+  const logQuery = logQ.trim().toLowerCase();
+  const pickLogs = [...logs]
+    .filter(l => !logQuery || l.title.toLowerCase().includes(logQuery) || logNoLabel(l).toLowerCase().includes(logQuery)
+      || (l.tags ?? []).some(t => t.toLowerCase().includes(logQuery)) || (l.withText ?? '').toLowerCase().includes(logQuery))
+    .sort((a, b) => b.no - a.no);
+
   const save = async () => {
     if (!title.trim()) { toast('시나리오 이름을 입력해 주세요'); return; }
     // 이름·별점·한줄평이 전부 빈 줄은 버린다
@@ -109,6 +141,14 @@ export function ReviewForm({ initial }: { initial: TrpgReview | null }) {
         category: cats.some(c => c.label === category) ? category : '',
         rule: rule.trim(),
         raters: rows,
+        // 연결한 로그 — 등록된 로그는 지금의 제목·주소·공개 여부로 다시 적는다
+        logs: (() => {
+          const out = links.map(x => {
+            const l = x.logId ? logs.find(y => y.id === x.logId) : undefined;
+            return l ? logLinkOf(l, x.id) : x;
+          });
+          return out.length ? out : undefined;
+        })(),
         playDate: playDate || undefined,
         visibility,
         thumbId,
@@ -219,7 +259,7 @@ export function ReviewForm({ initial }: { initial: TrpgReview | null }) {
                     <button type="button" className={x.role === 'GM' ? 'on' : ''} onClick={() => patchRater(x.id, { role: 'GM' })}>GM</button>
                     <button type="button" className={x.role === 'PC' ? 'on' : ''} onClick={() => patchRater(x.id, { role: 'PC' })}>PC</button>
                   </div>
-                  <KInput className="rv-rater-name" placeholder={`${x.role} 이름`} value={x.name}
+                  <KInput className="rv-rater-name" aria-label={`${x.role} 이름`} value={x.name}
                     onChange={e => patchRater(x.id, { name: e.target.value })} />
                   <Stars value={x.stars} onChange={n => patchRater(x.id, { stars: n })} />
                   {raters.length > 1 && (
@@ -227,12 +267,65 @@ export function ReviewForm({ initial }: { initial: TrpgReview | null }) {
                       onClick={() => setRaters(rs => rs.filter(y => y.id !== x.id))}>✕</button>
                   )}
                 </div>
-                <KTextarea placeholder={`${x.name.trim() || x.role} 한줄평`} value={x.text} maxRows={12}
+                <KTextarea aria-label="한줄평" value={x.text} maxRows={12}
                   onChange={e => patchRater(x.id, { text: e.target.value })} />
               </div>
             ))}
           </div>
           <button type="button" className="btn btn-ghost rv-add" onClick={() => setRaters(rs => [...rs, blankRater('PC')])}>＋ 인원 추가</button>
+        </div>
+
+        {/* 로그 연결 (v2.1 사용자 요청) — 이미 등록된 로그를 고르거나 주소를 넣는다. 여러 개 붙일 수 있다 */}
+        <div>
+          <label className="k-label">로그 연결 (선택)</label>
+          {links.length > 0 && (
+            <div className="rv-links">
+              {links.map(x => {
+                const l = x.logId ? logs.find(y => y.id === x.logId) : undefined;
+                return (
+                  <div key={x.id} className="rv-link">
+                    <span className="tg">{x.logId ? (l ? logNoLabel(l) : 'LOG') : 'URL'}</span>
+                    <span className="tx">
+                      {x.logId ? (l?.title ?? x.title ?? '찾을 수 없는 로그') : (x.label || prettyUrl(x.url ?? ''))}
+                      {x.logId && !l && <small>목록에 없는 로그</small>}
+                      {!x.logId && x.label && <small>{prettyUrl(x.url ?? '')}</small>}
+                    </span>
+                    <button type="button" className="btn btn-ghost x" data-tip="연결 빼기"
+                      onClick={() => setLinks(ls => ls.filter(y => y.id !== x.id))}>✕</button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+          <div className="mini-seg" style={{ marginBottom: 8 }}>
+            <button type="button" className={linkMode === 'log' ? 'on' : ''} onClick={() => setLinkMode('log')}>등록된 로그</button>
+            <button type="button" className={linkMode === 'url' ? 'on' : ''} onClick={() => setLinkMode('url')}>주소 넣기</button>
+          </div>
+          {linkMode === 'log' ? (
+            <div>
+              <KInput placeholder="로그 검색 — 제목·번호·태그" value={logQ} onChange={e => setLogQ(e.target.value)} />
+              <div className="rv-log-pick">
+                {pickLogs.map(l => (
+                  <div key={l.id} className={`it${linkedLog(l.id) ? ' on' : ''}`} onClick={() => toggleLog(l)}>
+                    <span className="no">{logNoLabel(l)}</span>
+                    <span className="t">{l.title}</span>
+                    {linkedLog(l.id) && <span className="ck">✓</span>}
+                  </div>
+                ))}
+                {pickLogs.length === 0 && (
+                  <p className="hint" style={{ padding: 10, margin: 0 }}>{logs.length ? '검색 결과가 없습니다' : '등록된 로그가 없습니다'}</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="rv-url-row">
+              <KInput className="u" placeholder="https://" value={urlIn} onChange={e => setUrlIn(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } }} />
+              <KInput className="l" placeholder="표시 이름 (선택)" value={urlLabel} onChange={e => setUrlLabel(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } }} />
+              <button type="button" className="btn btn-ghost" onClick={addUrl}>＋ 추가</button>
+            </div>
+          )}
         </div>
 
         <div className="rv-f-foot">

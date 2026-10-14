@@ -6,8 +6,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { useHrefBlock } from '@/components/shell/MenuGuard';
 import { sectionHref, MAIN_SEC, useSectionTitle } from '@/lib/sectionStore';
 import { useAuth } from '@/lib/auth';
-import { useLocalList, fmtDate } from '@/lib/postStore';
-import { TrpgReview, REVIEW_KEY, REVIEW_SEED, starText, ratersOf, canEditReview } from '@/lib/reviewStore';
+import { useLocalList } from '@/lib/postStore';
+import { TrpgReview, REVIEW_KEY, REVIEW_SEED, starText, ratersOf, canEditReview, reviewLinkViews } from '@/lib/reviewStore';
+import { TrpgLog, TRPG_SEED } from '@/lib/galleryStore';
 import { useBoardSettings, reviewCatsOf, boardBadgeStyle } from '@/lib/boardStore';
 import { ConfirmModal } from '@/components/ui/Modal';
 import { CroppedBlobImg } from '@/components/ui/CropEditor';
@@ -20,6 +21,7 @@ export default function ReviewDetailPage() {
   const [rows, setRows, loaded] = useLocalList<TrpgReview>(REVIEW_KEY, REVIEW_SEED);
   const { st: boardSet } = useBoardSettings();
   const [delAsk, setDelAsk] = useState(false);
+  const [logs] = useLocalList<TrpgLog>('ohome.trpg.v1', TRPG_SEED);   // 연결한 로그의 제목·주소 (v2.1)
   const r = rows.find(x => x.id === id);
   // 소속 게시판이 비공개면 주소로 들어와도 열리지 않게 — 다른 early return보다 먼저 (훅)
   const blocked = useHrefBlock(r && sectionHref('treview', r.secId ?? MAIN_SEC));
@@ -39,12 +41,14 @@ export default function ReviewDetailPage() {
   const canDelete = isAdmin || (!!user && r.authorId === user.id);
   const badge = cats.find(c => c.label === r.category);
   const rs = ratersOf(r);
+  // 연결한 로그 — 보는 사람이 볼 수 없는 로그는 빠진다 (reviewLinkViews)
+  const linkViews = reviewLinkViews(r.logs, logs, isAdmin);
 
   return (
     <section className="page rv-detail">
       <div className="page-head">
         <PageTitle href={tt.href}>{tt.title}</PageTitle>
-        <p>{[r.category, r.author, fmtDate(r.date)].filter(Boolean).join(' · ')}</p>
+        {/* 작성자·작성날짜는 보이지 않는다 (사용자 요청 — cm_260929 8bbdaa7과 같게. 말머리는 아래 배지로) */}
         <div className="head-actions">
           {canManage && <button className="btn btn-dark" onClick={() => router.push(`/treview/${r.id}/edit`)}>EDIT</button>}
           {canDelete && <button className="btn btn-dark" onClick={() => setDelAsk(true)}>DELETE</button>}
@@ -86,6 +90,23 @@ export default function ReviewDetailPage() {
             );
           })}
           {rs.length === 0 && <p className="hint" style={{ marginTop: 18 }}>아직 평가가 없습니다</p>}
+          {linkViews.length > 0 && (
+            <div className="rv-d-group">
+              <div className="rv-d-role">로그</div>
+              <div className="rv-d-logs">
+                {linkViews.map(v => (
+                  <a key={v.id} className="rv-d-log" href={v.href}
+                    {...(v.external
+                      ? { target: '_blank', rel: 'noopener noreferrer' }
+                      : { onClick: (e: React.MouseEvent) => { e.preventDefault(); router.push(v.href); } })}>
+                    <span className="tg">{v.tag}</span>
+                    <span className="tx">{v.text}{v.sub && <small>{v.sub}</small>}</span>
+                    <span className="ar">{v.external ? '↗' : '›'}</span>
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

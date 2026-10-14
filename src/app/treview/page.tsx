@@ -7,7 +7,7 @@ import React, { Suspense, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useSectionParam, filterSection, MAIN_SEC, secQuery } from '@/lib/sectionStore';
-import { useLocalList, fmtDate } from '@/lib/postStore';
+import { useLocalList } from '@/lib/postStore';
 import {
   TrpgReview, REVIEW_KEY, REVIEW_SEED, starText, ratersOf, raterLabel, reviewSearchText,
   canWriteReview, reviewEditorIds, sameIdList,
@@ -97,7 +97,8 @@ function ReviewPageInner() {
                 </div>
                 <div className="bd">
                   <b className="nm">{r.title}</b>
-                  <small className="meta">{[r.rule, r.playDate ? r.playDate.replace(/-/g, '.') : fmtDate(r.date)].filter(Boolean).join(' · ')}</small>
+                  {/* 룰 · 플레이한 날 — 작성자·작성날짜는 보이지 않는다 (v2.1 사용자 요청) */}
+                  {(r.rule || r.playDate) && <small className="meta">{[r.rule, r.playDate?.replace(/-/g, '.')].filter(Boolean).join(' · ')}</small>}
                   {/* 누가 몇 점을 줬는지 — GM 먼저 */}
                   {rs.length > 0 && (
                     <div className="rv-tile-raters">

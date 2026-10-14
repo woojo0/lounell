@@ -425,6 +425,8 @@ export function DecoEditor({ conf, onClose }: { conf: WidgetConf; onClose?: () =
 export interface BannerSlide {
   id: string; img: string; cap: string; sub: string; link: string; cls?: string;
   imgId?: string; crop?: CropValue;
+  /** 이 슬라이드만의 캡션·부제 글자색 (v2.1 사용자 요청 — 이미지마다 따로). 비우면 배너 기본색(settings.capColor/subColor) */
+  capColor?: string; subColor?: string;
 }
 
 interface SlideDraft extends BannerSlide { file?: File; localUrl?: string }
@@ -510,6 +512,17 @@ export function BannerEditor({ conf, onSaved, onClose }: {
             </>
           )}
         </div>
+        {/* 이 장의 글자색 (v2.1 사용자 요청 — 이미지마다 따로). 고르지 않으면 아래 「기본 캡션색·기본 부제색」을 따른다 */}
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="cp-lb">캡션색</span>
+          <ColorField value={d.capColor || capColor || '#ffffff'} onChange={hex => patch(d.id, { capColor: hex })} />
+          <span className="cp-lb">부제색</span>
+          <ColorField value={d.subColor || subColor || '#cfd3da'} onChange={hex => patch(d.id, { subColor: hex })} />
+          {d.capColor || d.subColor
+            ? <button className="btn btn-ghost" style={{ padding: '4px 9px', fontSize: 10, whiteSpace: 'nowrap' }}
+                onClick={() => patch(d.id, { capColor: undefined, subColor: undefined })}>기본색으로</button>
+            : <small className="hint" style={{ margin: 0 }}>기본색 사용 중</small>}
+        </div>
       </div>
       <button className="btn btn-ghost" style={{ height: 24, padding: '0 11px', fontSize: 10.5, display: 'inline-flex', alignItems: 'center' }}
         onClick={() => del.ask(`슬라이드${d.cap ? ` 「${d.cap}」` : ''}를 삭제하시겠습니까?`,
@@ -537,12 +550,13 @@ export function BannerEditor({ conf, onSaved, onClose }: {
           setDraft(list => [...list, { id: `s-${Date.now().toString(36)}`, img: '', cap: '', sub: '', link: '' }])}>
           ＋ ADD SLIDE
         </button>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <span style={{ fontSize: 11.5, color: 'var(--sub)' }}>전환 간격</span>
           <KStep value={interval} min={2} max={30} suffix="초" onChange={setIntervalSec} />
-          <span className="cp-lb">캡션색</span>
+          {/* 배너 기본 글자색 — 장마다 따로 고르지 않은 슬라이드에 쓰인다 */}
+          <span className="cp-lb" data-tip="장마다 따로 고르지 않은 슬라이드에 쓰입니다">기본 캡션색</span>
           <ColorField value={capColor || '#ffffff'} onChange={setCapColor} />
-          <span className="cp-lb">부제색</span>
+          <span className="cp-lb" data-tip="장마다 따로 고르지 않은 슬라이드에 쓰입니다">기본 부제색</span>
           <ColorField value={subColor || '#cfd3da'} onChange={setSubColor} />
           <KCheck label="위젯 테두리" checked={!noBorder} onChange={v => setNoBorder(!v)} />
           <button className="btn btn-dark" onClick={async () => {
@@ -551,6 +565,7 @@ export function BannerEditor({ conf, onSaved, onClose }: {
                 id: d.id, img: d.img, cap: d.cap, sub: d.sub, link: d.link, cls: d.cls,
                 imgId: d.file ? await putBlob(d.file) : d.imgId,
                 crop: d.crop,
+                capColor: d.capColor || undefined, subColor: d.subColor || undefined,   // 이 장의 글자색 (v2.1)
               })));
             updateWidget(conf.id, { settings: { ...conf.settings, slides, interval, noBorder: noBorder || undefined, capColor: capColor || undefined, subColor: subColor || undefined } }, { persist: true });
             toast('배너가 저장되었습니다');

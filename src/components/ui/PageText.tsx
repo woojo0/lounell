@@ -51,7 +51,9 @@ export function PageTitle({ children, href, style, lookupHref }: {
       ? pageTitleFor(ms, href) ?? (isExtra(href) ? menuLabelOf(ms, href) : null)
       : full !== pathname
         ? pageTitleFor(ms, full) ?? menuLabelOf(ms, full)
-        : pageTitleFor(ms, pathname);
+        // 상세·글쓰기처럼 한 단계 아래 주소(/tchars/abc)는 그 목록(/tchars)에 정한 타이틀을 따른다 (cm_260929 283eca9 —
+      // 「TRPG 캐릭터 게시판 제목을 바꿔도 글을 열면 기본 제목이 뜬다」)
+      : (pageTitleFor(ms, pathname) ?? (pathname.split('/').length > 2 ? pageTitleFor(ms, `/${pathname.split('/')[1]}`) : null));
   // 지금 있는 페이지면 다시 불러오기 — 상단 메뉴 재클릭과 동일 동작 (v1.9 사용자 요청).
   // 추가 게시판·섹션의 목록(쿼리 포함 주소)에서도 같은 동작이 되게 full과도 비교한다 (v2.0)
   return (

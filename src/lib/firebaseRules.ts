@@ -75,7 +75,7 @@ service cloud.firestore {
         'posts', 'guestbook', 'characters', 'relations', 'gallery', 'roadview',
         'trpg_logs', 'trpg_log_bodies', 'trpg_chars', 'dotori', 'playlog', 'rp_rooms', 'threads',
         'diary', 'memos', 'commissions', 'applicants', 'moods', 'comments', 'qa_answers', 'rp_messages',
-        'notifications', 'thread_posts', 'videos', 'rp_typing', 'push_subs'
+        'notifications', 'thread_posts', 'videos', 'rp_typing', 'push_subs', 'sched_events'
       ];
     }
 

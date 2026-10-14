@@ -24,6 +24,7 @@ const LABEL: Record<string, string> = {
   trpg_log_bodies: 'RP LOG 본문',
   thread_posts: '감상타래 글',
   applicants: '커미션 신청',
+  sched_events: '스케줄러 일정',
 };
 
 export function ListSync() {

@@ -17,7 +17,7 @@ import { CroppedBlobImg, CropValue } from '@/components/ui/CropEditor';
 import { useLocalList } from '@/lib/postStore';
 import { RoadItem, ROAD_SEED, BackupPost, BACKUP_SEED } from '@/lib/galleryStore';
 import { DiaryPost, DIARY_SEED, Mood, MOOD_SEED, moodTint, diaryOrder } from '@/lib/diaryStore';
-import { useSched, eventColor } from '@/lib/schedStore';
+import { useSched, eventColor, nextOccurrence, type SchedEvent } from '@/lib/schedStore';
 import { StickyMemo, MEMO_SEED, MEMO_SIZE_W, useMemoSettings } from '@/lib/memoStore';
 import { BlobImg, useBlobUrl } from '@/lib/blobStore';
 import { normalizeInternalLink } from '@/lib/link';
@@ -405,15 +405,8 @@ export function UpcomingWidget() {
   const upcoming = st.events
     .filter(e => seeSec(e.secId))
     .filter(e => isAdmin || e.visibility === 'public' || (e.visibility === 'member' && !!user))
-    .map(e => {
-      let d = e.start;
-      if (e.repeat === 'yearly') {
-        const thisYear = `${today.getFullYear()}-${e.start.slice(5)}`;
-        d = thisYear >= todayStr ? thisYear : `${today.getFullYear() + 1}-${e.start.slice(5)}`;
-      }
-      return { e, d };
-    })
-    .filter(x => x.d >= todayStr && x.d <= limitStr)
+    .map(e => ({ e, d: nextOccurrence(e, todayStr) }))   // 매년·매주 반복은 다음에 오는 날로 (cm_260929 6393165)
+    .filter((x): x is { e: SchedEvent; d: string } => x.d !== null && x.d <= limitStr)
     .sort((a, b) => a.d.localeCompare(b.d))
     .slice(0, 3);
   if (!canSee) return null;   // 메뉴가 비공개면 위젯 자체를 띄우지 않는다 (v2.0)

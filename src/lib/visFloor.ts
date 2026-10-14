@@ -33,6 +33,7 @@ const AREA: Record<string, { kind?: SectionKind; href?: string; board?: boolean 
   videos: { kind: 'videos' },   // Videos 게시판 (커플홈) — 소속은 secId
   rp_rooms: { href: '/rp' },
   rp_typing: { href: '/rp' },   // 입력 중 표시 (커플홈) — 역극과 같은 공개범위
+  sched_events: { kind: 'sched' },   // 스케줄러 일정 — 메뉴가 비공개면 일정도
   characters: { kind: 'chars' },
   relations: { href: '/rels' },
   trpg_chars: { href: '/tchars' },

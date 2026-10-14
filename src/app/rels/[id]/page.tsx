@@ -15,7 +15,7 @@ import {
   QaAnswerRow, QA_KEY, QA_SEED, MergedAnswer, answersFor,
   findByKey, charPath, relPath, openableRels, relMenuHref, auParamOf, faceCropOf,
 } from '@/lib/charStore';
-import { RelQuestionSet, RELQ_SEED, RELQ_KEY, CP_LABEL } from '@/lib/relqStore';
+import { RelQuestionSet, CP_LABEL, useRelqSets } from '@/lib/relqStore';
 import { putBlob } from '@/lib/blobStore';
 import { GrantsEditor } from '@/components/chars/GrantsEditor';
 import { TrpgLog, TRPG_SEED, logPath } from '@/lib/galleryStore';
@@ -365,7 +365,7 @@ export default function RelDetailPage() {
   const [auLabel, setAuLabel] = useState('');
   const [auCatch, setAuCatch] = useState('');
   const [auCp, setAuCp] = useState<RelCpTag>('cp');       // 새 AU의 CP/NCP (v1.9)
-  const [qsets] = useLocalList<RelQuestionSet>(RELQ_KEY, RELQ_SEED); // 자관 질문 세트 (환경설정)
+  const [qsets] = useRelqSets(); // 자관 질문 세트 (환경설정 — 사이트 설정으로 저장, cm_260929 283eca9)
   // 문답 답변은 자관과 따로 저장한다 (v2.0) — 자관 안에 두면 답할 때 자관을 UPDATE 해야 해서
   // 관리자가 만든 자관에 일반 회원이 답을 달 수 없었다 (댓글과 같은 뿌리)
   const [qaRows, setQaRows] = useLocalList<QaAnswerRow>(QA_KEY, QA_SEED);
@@ -707,7 +707,7 @@ export default function RelDetailPage() {
       let qaPool = auQaPool;
       if (auQaPool.length > 0) {
         const i = Math.floor(Math.random() * auQaPool.length);
-        const no = Math.max(0, cur.no, ...rest.map(x => x.no)) + 1;
+        const no = cur.no;   // 건너뛴 번호를 새 질문이 물려받는다 (cm_260929 283eca9 — 건너뛰기로 번호가 늘지 않게)
         questions = [{ no, q: auQaPool[i], date: todayYmd(), answers: [] }, ...rest];
         qaPool = auQaPool.filter((_, j) => j !== i);
       }

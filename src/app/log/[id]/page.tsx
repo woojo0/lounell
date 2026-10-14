@@ -480,7 +480,10 @@ if(!h)return;
 // 값이 그대로여도 가끔은 다시 알린다 (v2.0) — 바깥이 다른 이유로 높이를 되돌려 놓았을 수 있다.
 // 예전에는 「같으면 안 보냄」이라, 한 번 어긋나면 되돌릴 방법이 아예 없었다
 if(h!==p||force){p=h;parent.postMessage({__logH:h},'*');}}catch(e3){}}
-document.addEventListener('DOMContentLoaded',function(){r(1)});addEventListener('resize',function(){r(1)});
+// 안쪽 스크롤 상자 풀기 (cm_260929 283eca9 — 「로그 본문에 스크롤이 이중으로」): 로그 파일이 본문을 고정 높이·overflow:auto 상자에
+// 담아 두면 바깥 프레임을 내용 높이로 맞춰도 상자 안에서 또 스크롤이 생긴다. 넘치는 스크롤 상자는 높이 제한을 풀어 내용만큼 늘린다
+function u(){try{var els=document.body?document.body.getElementsByTagName('*'):[];for(var i=0;i<els.length;i++){var el=els[i];var tg=el.tagName;if(tg==='TEXTAREA'||tg==='SELECT'||tg==='IFRAME')continue;var cs=getComputedStyle(el);var oy=cs.overflowY;if((oy==='auto'||oy==='scroll')&&el.scrollHeight>el.clientHeight+2&&el.clientHeight>=60){el.style.setProperty('height','auto','important');el.style.setProperty('max-height','none','important');el.style.setProperty('overflow','visible','important');}}}catch(e6){}}
+document.addEventListener('DOMContentLoaded',function(){u();r(1)});addEventListener('load',function(){u();r(1)});setTimeout(function(){u();r(1)},1500);setTimeout(function(){u();r(1)},4000);addEventListener('resize',function(){r(1)});
 // **이미지·폰트는 첫 그림 뒤에 붙으면서 높이를 바꾼다** (v2.0 사용자 발견 — 긴 로그 아래 빈 공간).
 // 개별 이미지의 load/error까지 잡으려면 캡처 단계로 들어야 한다(이 이벤트들은 위로 올라오지 않는다).
 addEventListener('load',function(){r(1)},true);

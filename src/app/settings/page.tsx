@@ -6,7 +6,7 @@ import { useAuth, loadInviteCode, saveInviteCode } from '@/lib/auth';
 import { PushAdminRow } from '@/components/shell/PushSettings';
 import { useMembers } from '@/lib/members';
 import { useTheme } from '@/lib/ThemeProvider';
-import { ThemeVars } from '@/lib/theme';
+import { ThemeVars, softAccentOf } from '@/lib/theme';
 import { ColorField } from '@/components/ui/ColorField';
 import { KStep, KToggle, KInput, LiveInput, KTextarea, KSelect, KCheck, Pager } from '@/components/ui/Kit';
 import { DragList } from '@/components/ui/DragList';
@@ -35,7 +35,7 @@ import { useCustomLinks, linkEntries, toInternalPath } from '@/lib/linkStore';
 import { useSiteDraft } from '@/lib/siteStore';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useCursorSettings, CursorState, CURSOR_STATE_LABEL } from '@/lib/cursorStore';
-import { RelQuestionSet, RELQ_SEED, RELQ_KEY, CP_LABEL } from '@/lib/relqStore';
+import { RelQuestionSet, CP_LABEL, useRelqSets } from '@/lib/relqStore';
 import { SymbolInput } from '@/components/ui/SymbolInput';
 import { allBlobs, putBlobAs, useBlobUrl, getBlob } from '@/lib/blobStore';
 import { parseAni } from '@/lib/aniCursor';
@@ -383,12 +383,13 @@ function DesignPane() {
       </div>
 
       <div className="set-row">
-        <div className="l"><b>BGM 플레이어</b></div>
+        <div className="l"><b>BGM 플레이어</b><small>재생 중 — 곡 목록에서 지금 나오는 곡의 글씨색 (비우면 포인트 컬러에서 밝게 파생)</small></div>
         <div className="cp-group">
           <CP label="배경" k="bgmBg" />
           <CP label="글씨" k="bgmFg" />
           <CP label="아이콘" k="bgmIc" />
           <CP label="볼륨바" k="bgmVol" />
+          <CP label="재생 중" k="bgmOn" def={softAccentOf(state.vars.accent)} />
         </div>
       </div>
 
@@ -943,7 +944,7 @@ function CharPane() {
 }
 
 function RelQPane() {
-  const [sets, setSets] = useLocalList<RelQuestionSet>(RELQ_KEY, RELQ_SEED);
+  const [sets, setSets] = useRelqSets();   // 사이트 설정으로 저장 — 서버에도 올라간다 (cm_260929 283eca9: 이 브라우저에만 남았다)
   const [selId, setSelId] = useState<string | null>(null);
   const del = useConfirmDelete();
   const relqToast = useToast();

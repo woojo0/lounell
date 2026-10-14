@@ -3,6 +3,7 @@
 // 캐릭터 선택 발화(테마색 말풍선) · 지문(/desc) · 메시지 수정/삭제 · 완결/공개 전환 · 로그(txt/html 저장 · RP LOG 올리기)
 // ※ 실시간 송수신·입력 중 표시·참여자 전원 동의는 Supabase Realtime 연동 시 활성화 (현재 localStorage)
 import React, { useLayoutEffect, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/lib/auth';
 import { useLocalList, newId, LIST_QUIET_ERR_EVT } from '@/lib/postStore';
 import {
@@ -251,7 +252,10 @@ export default function RpPage() {
       ...(imsg && plainRp ? { rp: true } : {}),   // 메신저 방의 「일반 RP」 — 원래 역극 모양으로 (커플홈)
     };
     // 사진과 글을 같이 보내면 **따로 두 개**로 (사용자 확정 — 한 글에 사진+말풍선이 붙는 모양이 별로였다): 사진 먼저, 글 다음
-    const now = Date.now();
+    // 순서는 시각(date)으로 정해지는데, 기기마다 시계가 조금씩 달라 핑퐁할 때 내 글이 상대 글 **앞으로** 끼어드는 일이 있다
+    // (cm_260929 7ae1f20 — 「실시간으로 핑퐁하면 순서가 섞인다」). 내가 이미 본 마지막 발화보다 늘 1ms 뒤로 찍어 뒤에 붙게 한다
+    const lastSeen = Math.max(0, ...allMsgs.map(m => Date.parse(m.date) || 0));
+    const now = Math.max(Date.now(), lastSeen + 1);
     const out: RpMessage[] = [];
     if (imgId) out.push({ ...base, id: newId(), text: '', date: new Date(now).toISOString(), imgId });
     if (t) out.push({ ...base, id: newId(), text: t, date: new Date(now + (imgId ? 1 : 0)).toISOString() });
@@ -292,6 +296,40 @@ export default function RpPage() {
       else setRooms(rooms.map(r => r.id === sel.id
         ? { ...r, messages: r.messages.filter(x => x.id !== m.id) } : r));
     });
+  };
+
+  /* 발화 순서 바꾸기 (cm_260929 7ae1f20) — 그래도 섞였으면 말풍선 우클릭 → 위/아래로. 순서는 시각(date)이 정하므로
+     이웃 발화 사이의 시각으로 옮긴다 (내 발화와 관리자만 — 남의 발화는 서버 규칙이 못 고치게 한다) */
+  const [msgCtx, setMsgCtx] = useState<{ x: number; y: number; m: RpMessage } | null>(null);
+  useEffect(() => {
+    if (!msgCtx) return;
+    const close = () => setMsgCtx(null);
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') setMsgCtx(null); };
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', key);
+    return () => { window.removeEventListener('click', close); window.removeEventListener('keydown', key); };
+  }, [msgCtx]);
+  const canMoveMsg = (m: RpMessage) => !!user && (m.authorId === user.id || isAdmin);
+  const openMsgCtx = (e: React.MouseEvent, m: RpMessage) => {
+    if (!canMoveMsg(m)) return;
+    e.preventDefault();
+    setMsgCtx({ x: e.clientX, y: e.clientY, m });
+  };
+  const moveMsg = (m: RpMessage, dir: 'up' | 'down') => {
+    if (!sel) return;
+    const list = msgsOf(sel);   // 시간순 전체 (잘라 둔 이전 대화 포함)
+    const i = list.findIndex(x => x.id === m.id);
+    const j = dir === 'up' ? i - 1 : i + 1;
+    if (i < 0 || j < 0 || j >= list.length) { toast(dir === 'up' ? '맨 위입니다' : '맨 아래입니다'); return; }
+    const t1 = Date.parse(list[j].date);                                   // 자리를 바꿀 이웃
+    const beyond = list[dir === 'up' ? j - 1 : j + 1];                     // 그 너머 — 둘 사이로 들어간다
+    const t2 = beyond ? Date.parse(beyond.date) : (dir === 'up' ? t1 - 2000 : t1 + 2000);
+    let t = Math.round((t1 + t2) / 2);
+    if (t === t1 || t === t2) t = dir === 'up' ? t1 - 1 : t1 + 1;
+    const date = new Date(t).toISOString();
+    if (msgRows.some(x => x.id === m.id)) setMsgRows(msgRows.map(x => (x.id === m.id ? { ...x, date } : x)));
+    else setRooms(rooms.map(r => r.id === sel.id
+      ? { ...r, messages: r.messages.map(x => (x.id === m.id ? { ...x, date } : x)) } : r));
   };
 
   // 방 개설 모달
@@ -572,12 +610,12 @@ export default function RpPage() {
                     if (imsg) {
                       const dm = m.text.trim().match(/^(\d{4}\s?[.\-/]\s?\d{1,2}\s?[.\-/]\s?\d{1,2}\.?)([\s\S]*)$/);
                       return (
-                        <div key={m.id} className={`im-sys${dm ? ' im-date' : ''}`}>
+                        <div key={m.id} className={`im-sys${dm ? ' im-date' : ''}`} onContextMenu={e => openMsgCtx(e, m)}>
                           {dm ? <><b>{dm[1]}</b>{dm[2]}</> : m.text}{acts}
                         </div>
                       );
                     }
-                    return <div key={m.id} className="msg-desc">{m.text}{acts}</div>;
+                    return <div key={m.id} className="msg-desc" onContextMenu={e => openMsgCtx(e, m)}>{m.text}{acts}</div>;
                   }
                   const ch = rpChars.find(c => c.id === m.charId);
                   const name = ch?.name ?? '';
@@ -608,7 +646,7 @@ export default function RpPage() {
                       <React.Fragment key={m.id}>
                         {/* 시각 줄은 두지 않는다 (사용자 확정 — 만들어진 역극이라 실제 시간은 의미가 없다). 묶음만 가른다 */}
                         <div className={`im-msg ${rightSide ? 'me' : 'them'}${first ? ' first' : ''}${last ? ' last' : ''}`}
-                          style={{ ['--cc' as string]: hexRgb(ch?.color) }}>
+                          style={{ ['--cc' as string]: hexRgb(ch?.color) }} onContextMenu={e => openMsgCtx(e, m)}>
                           {!rightSide && <span className="im-face">{runEnd && <Face ch={ch} crop={faceOf(ch)} className="f" />}</span>}
                           <div className="im-col">
                             {!rightSide && nameNeeded && <div className="im-who">{name}</div>}
@@ -627,7 +665,7 @@ export default function RpPage() {
                     );
                   }
                   return (
-                    <div key={m.id} className={`msg ${rightSide ? 'me' : ''}`} style={{ ['--cc' as string]: hexRgb(ch?.color) }}>
+                    <div key={m.id} className={`msg ${rightSide ? 'me' : ''}`} style={{ ['--cc' as string]: hexRgb(ch?.color) }} onContextMenu={e => openMsgCtx(e, m)}>
                       {/* 메신저 방의 일반 RP: 내 글은 얼굴 없이(내 말풍선처럼 오른쪽 끝 맞춤), 상대 글은 묶음 끝에만 얼굴 —
                           이어지는 글은 빈자리만 두어 말풍선 출발선이 문자 말풍선과 같게 (사용자 확정) */}
                       {!imsg
@@ -890,6 +928,21 @@ export default function RpPage() {
           { label: 'END', kind: 'dark', onClick: () => { patchRoom({ status: 'done' }); setEndAsk(false); } },
           { label: 'CANCEL', kind: 'ghost', onClick: () => setEndAsk(false) },
         ]} />
+      {/* 발화 우클릭 메뉴 — 순서 위/아래 · 내 발화면 수정·삭제도 (cm_260929 7ae1f20) */}
+      {msgCtx && typeof document !== 'undefined' && createPortal(
+        <div className="ctx-menu on" style={{ left: msgCtx.x, top: msgCtx.y }} onClick={e => e.stopPropagation()}>
+          <div className="ctx-ttl">발화 순서</div>
+          <button onClick={() => { moveMsg(msgCtx.m, 'up'); setMsgCtx(null); }}>▲ 위로 보내기</button>
+          <button onClick={() => { moveMsg(msgCtx.m, 'down'); setMsgCtx(null); }}>▼ 아래로 보내기</button>
+          {user && msgCtx.m.authorId === user.id && (
+            <>
+              <button onClick={() => { setEditMsg(msgCtx.m); setEditText(msgCtx.m.text); setMsgCtx(null); }}>수정</button>
+              <button onClick={() => { removeMsg(msgCtx.m); setMsgCtx(null); }}>삭제</button>
+            </>
+          )}
+        </div>,
+        document.body,
+      )}
       {del.element}
     </section>
   );

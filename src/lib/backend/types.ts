@@ -147,6 +147,8 @@ export const COLLECTION_OF: Record<string, string> = {
   'ohome.notif.v1': 'notifications',
   // 웹푸시 기기 구독 (커플홈) — 회원마다 기기별 한 문서, 공개범위 member (보내는 쪽이 받는 사람 구독을 읽어야 한다)
   'ohome.pushsubs.v1': 'push_subs',
+  // 스케줄러 일정 (cm_260929 6393165) — 회원도 등록하게 설정(ohome.sched.v1)이 아니라 자기 행으로 (카테고리·회원 허용 옵션은 설정에 그대로)
+  'ohome.schedev.v1': 'sched_events',
 };
 
 export const CONTENT_COLLECTIONS = Object.values(COLLECTION_OF);

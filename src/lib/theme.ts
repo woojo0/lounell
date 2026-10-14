@@ -54,7 +54,9 @@ export interface ThemeVars {
   // focusColor: 테두리·링 색 / focusRing: 링 방식(은은한 글로우 · 선명한 라인 · 없음) / focusW: 링 두께 px
   focusColor?: string; focusRing?: 'glow' | 'line' | 'none'; focusW?: number;
   // 포인트 컬러
-  accent: string; accentSoft: string;
+  accent: string; accentSoft: string;   // accentSoft는 저장값을 쓰지 않고 늘 accent에서 파생한다 (cm_260929 6cbb8f0 — 아래 softAccentOf)
+  /** 재생 중인 곡 글씨색 — 비우면 포인트 컬러에서 밝게 파생한 색(--accent-soft) */
+  bgmOn?: string;
   // 모서리 둥글기(px)
   radius: number; radiusS: number;
   // 블록(패널·카드) 그림자 세기 % — 0 = 없음, 100 = 기본, 200 = 최대
@@ -113,10 +115,16 @@ export const LIGHT_THEME: ThemeVars = {
  * 포인트 자동 모드 (v1.8 확정) — 포인트 컬러 하나로 전체 팔레트 파생.
  * 톤(다크/라이트) 선택 가능, 파생값은 세부 항목 hex 란에 전부 채워짐 (v1.9).
  */
+/** 연한 포인트색 — 포인트 컬러에서 밝고 살짝 흐리게 (호버·BGM 재생 곡·드롭존 등). 모든 모드에서 이 공식 하나로 (cm_260929 6cbb8f0).
+ *  function 선언으로 — 기본 테마를 모듈 로드 때 계산하는 코드보다 앞에 있어야 한다 (const였을 때 TDZ 오류) */
+export function softAccentOf(accent: string): string {
+  return adjust(accent, cc => ({ l: Math.min(0.75, cc.l + 0.18), s: cc.s * 0.8 }));
+}
+
 export function derivePointTheme(accent: string, tone: PointTone): ThemeVars {
   const { h, s } = hexToHsl(accent);
   const c = (sat: number, lig: number) => hslToHex({ h, s: Math.min(1, s * sat), l: lig });
-  const accentSoft = adjust(accent, cc => ({ l: Math.min(0.75, cc.l + 0.18), s: cc.s * 0.8 }));
+  const accentSoft = softAccentOf(accent);
 
   if (tone === 'dark') {
     return {
@@ -243,7 +251,9 @@ export function themeToCssVars(t: ThemeVars): Record<string, string> {
     '--sb-thumb': t.sbThumb, '--sb-bd': t.sbBd,
     '--search-bg': t.searchBg ?? '#232830', '--search-fg': t.searchFg ?? '#e8eaee',
     '--search-ic': t.searchIc ?? '#8b919b', '--search-bd': t.searchBd ?? '#3a404a',
-    '--accent': t.accent, '--accent-soft': t.accentSoft,
+    // 저장된 accentSoft는 쓰지 않는다 — 세부 모드에서 포인트만 바꾸면 옛 파생값이 남아 「적용한 적 없는 색」이 호버·BGM 재생 곡에 나왔다
+    '--accent': t.accent, '--accent-soft': softAccentOf(t.accent),
+    '--bgm-on': t.bgmOn ?? softAccentOf(t.accent),   // 재생 중 곡 — 비우면 연한 포인트색
     // 진한 버튼 3색 — 호버 미지정 시 배경에서 살짝 밝게 자동 파생
     '--btn-dark': t.btnDark ?? '#1d2025',
     '--btn-dark-fg': t.btnDarkFg ?? '#ffffff',

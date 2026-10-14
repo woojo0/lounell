@@ -151,7 +151,8 @@ declare content_tables text[] := array[
   'thread_posts', -- 감상타래 글 (커플홈 — 같은 이유로 타래 안이 아니라 자기 행으로. 두 사람이 같이 쓴다)
   'videos',       -- Videos 게시판 (커플홈 — 영상 하나를 파일·링크로)
   'notifications', -- 알림 (v2.0 — 기기 보관이던 것을 서버로: 받은 사람 계정으로 어느 기기에서나)
-  'push_subs'      -- 웹푸시 기기 구독 (커플홈 — 회원끼리 읽힌다: 보내는 쪽이 받는 사람 구독을 읽어야. 서버 개인키 없이는 못 보낸다)
+  'push_subs',     -- 웹푸시 기기 구독 (커플홈 — 회원끼리 읽힌다: 보내는 쪽이 받는 사람 구독을 읽어야. 서버 개인키 없이는 못 보낸다)
+  'sched_events'   -- 스케줄러 일정 (회원도 등록하게 설정이 아니라 자기 행으로)
 ];
 begin
   foreach t in array content_tables loop

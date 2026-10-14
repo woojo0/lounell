@@ -46,6 +46,9 @@ export function BannerWidget({ conf }: { conf: WidgetConf }) {
   const slides = ((conf.settings.slides as BannerSlide[]) ?? []).length > 0
     ? (conf.settings.slides as BannerSlide[]) : DEMO_SLIDES;
   const interval = (conf.settings.interval as number) ?? 4;
+  // 캡션·부제 글자색 (v2.1 사용자 요청) — 배너 관리에서. 비우면 CSS 기본(흰색·연회색)
+  const capColor = conf.settings.capColor as string | undefined;
+  const subColor = conf.settings.subColor as string | undefined;
 
   useEffect(() => {
     if (slides.length < 2) return;
@@ -63,7 +66,7 @@ export function BannerWidget({ conf }: { conf: WidgetConf }) {
   };
 
   return (
-    <div className="banner" style={{ cursor: s.link && !editOn ? 'pointer' : undefined }} onClick={go}>
+    <div className={`banner ${conf.settings.noBorder ? 'no-bd' : ''}`} style={{ cursor: s.link && !editOn ? 'pointer' : undefined }} onClick={go}>
       {slides.map((sl, i) => (
         <div key={sl.id} className={`slide ${i === Math.min(cur, slides.length - 1) ? 'on' : ''}`}>
           {sl.imgId
@@ -75,7 +78,7 @@ export function BannerWidget({ conf }: { conf: WidgetConf }) {
               : <div className={`ph ${sl.cls ?? ''}`} style={{ position: 'absolute', inset: 0 }}><span>SLIDE BANNER {String(i + 1).padStart(2, '0')}</span></div>}
         </div>
       ))}
-      <div className="cap"><b>{s.cap}</b><span>{s.sub}</span></div>
+      <div className="cap"><b style={capColor ? { color: capColor } : undefined}>{s.cap}</b><span style={subColor ? { color: subColor } : undefined}>{s.sub}</span></div>
       <div className="dots" onClick={e => e.stopPropagation()}>
         {slides.map((sl, i) => (
           <i key={sl.id} className={i === Math.min(cur, slides.length - 1) ? 'on' : ''} onClick={() => setCur(i)} />
@@ -214,7 +217,7 @@ export function LatestWidget() {
     ...(seeGal ? backups : [])
       .filter(p => canViewHref(menuSet, sectionHref('gallery', p.secId ?? MAIN_SEC), viewer))
       .filter(p => p.visibility === 'public' && !p.fold).map(p => ({
-      id: `b-${p.id}`, date: p.date, ref: p.images[0], ph: p.phList[0] ?? 'cool',
+      id: `b-${p.id}`, date: p.date, ref: p.thumbId ?? p.images[0], ph: p.phList[0] ?? 'cool',
       href: `/gallery/${p.id}`, tip: `갤러리 · ${p.title}`,
     })),
   ].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
@@ -561,7 +564,7 @@ export function DecoWidget({ conf }: { conf: WidgetConf }) {
   const hPx = conf.settings.hPx as number | undefined;
   const canGo = !editOn && !!cur?.link;
   return (
-    <div className="deco-wgt"
+    <div className={`deco-wgt ${conf.settings.noBorder ? 'no-bd' : ''}`}
       style={{
         position: 'relative', overflow: 'hidden',
         width: wPx ? `${wPx}px` : '100%', maxWidth: '100%',

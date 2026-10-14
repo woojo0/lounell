@@ -17,16 +17,17 @@ import { DiaryPost, DIARY_SEED } from '@/lib/diaryStore';
 import { newId, todayYmd } from '@/lib/postStore';
 import { useCommSettings, badgeStyle, CommBadge, CommSettings } from '@/lib/commStore';
 import {
-  useBoardSettings, boardBadgeStyle, BoardBadge, galleryCatsOf, videoCatsOf,
-  useBoards, Board, BoardSkin, BoardPerm, DEFAULT_BOARD_CATS, MAIN_BOARD_ID, boardHref,
+  useBoardSettings, boardBadgeStyle, BoardBadge, galleryCatsOf, videoCatsOf, feedCatsOf, roadCatsOf, feedHideAuthorOf,
+  useBoards, Board, BoardSkin, BoardPerm, DEFAULT_BOARD_CATS, MAIN_BOARD_ID, boardHref, perPageOf, PER_PAGE_DEFAULT, reviewCatsOf,
 } from '@/lib/boardStore';
 import { useThreadSettings, ThreadWork, THREAD_SEED, ThreadCat, threadBadgeStyle, threadCats, threadCatsPatch } from '@/lib/threadStore';
-import { useTrpgSettings, DOTORI_STATUS_KEYS, DotoriStatus, dotoriBadgeStyle } from '@/lib/galleryStore';
+import { useTrpgSettings, dotoriStatusKeys, dotoriBadgeOn, dotoriHiddenInAll, DotoriStatus, dotoriBadgeStyle } from '@/lib/galleryStore';
 import { useMemoSettings } from '@/lib/memoStore';
 import {
   useMenuSettings, MenuSettings, MenuPerm, MenuVis, PLAYLOG_COLS,
   MenuGroupNode, MenuLeaf, defaultTree, newGroupId, menuLabelFor, extraBoardHref, boardEntries,
   IMG_PROTECT_AREAS, writeKeyOf,
+  writeDefaultOf,
 } from '@/lib/menuStore';
 import { FEATURES } from '@/lib/menu';
 import { SectionsBlock } from '@/components/settings/SectionList';
@@ -478,7 +479,7 @@ function DesignPane() {
       <WidgetStyleRow />
 
       <div className="set-row">
-        <div className="l"><b>진한 버튼</b><small>등록·저장 버튼과 체크박스·선택 필터 칩 공통</small></div>
+        <div className="l"><b>진한 버튼</b><small>등록·저장·작성 완료(POST/SAVE)·삭제 버튼과 체크박스·선택 필터 칩 공통 — 호버까지 이 3색</small></div>
         <div className="cp-group">
           <CP label="버튼" k="btnDark" />
           <CP label="글씨" k="btnDarkFg" />
@@ -658,6 +659,9 @@ function BoardPane() {
     st, patchSystem, patchGallery,
     patchGalleryCat, addGalleryCat, removeGalleryCat, setGalleryCats,
     patchVideoCat, addVideoCat, removeVideoCat, setVideoCats,
+    patchFeedCat, addFeedCat, removeFeedCat, setFeedCats, setFeedHideAuthor,
+    patchRoadCat, addRoadCat, removeRoadCat, setRoadCats,
+  setPerPage, patchReviewCat, addReviewCat, removeReviewCat, setReviewCats, setReviewStars,
   } = useBoardSettings();
   const { boards, setBoards, patchBoard } = useBoards();
   const [catBoard, setCatBoard] = useState(MAIN_BOARD_ID);   // 말머리 편집 대상 게시판
@@ -673,6 +677,16 @@ function BoardPane() {
   const [vidSecSel, setVidSec] = useState(MAIN_SEC);
   const vidSec = vidSecs.some(s2 => s2.id === vidSecSel) ? vidSecSel : MAIN_SEC;
   const vidCats = videoCatsOf(st, vidSec);
+  // 큰 그림 게시판 · 로드비 말머리 (v2.1) — 갤러리와 같은 방식으로 게시판마다
+  const feedSecs = secList('feed');
+  const [feedSecSel, setFeedSec] = useState(MAIN_SEC);
+  const feedSec = feedSecs.some(s2 => s2.id === feedSecSel) ? feedSecSel : MAIN_SEC;
+  const roadSecs = secList('roadview');
+  const [roadSecSel, setRoadSec] = useState(MAIN_SEC);
+  const roadSec = roadSecs.some(s2 => s2.id === roadSecSel) ? roadSecSel : MAIN_SEC;
+  const reviewSecs = secList('treview');
+  const [reviewSecSel, setReviewSec] = useState(MAIN_SEC);
+  const reviewSec = reviewSecs.some(s2 => s2.id === reviewSecSel) ? reviewSecSel : MAIN_SEC;
   const del = useConfirmDelete();
 
   const sel = boards.find(b => b.id === catBoard) ?? boards[0];
@@ -870,6 +884,90 @@ function BoardPane() {
       {vidCats.length === 0 && <div className="d" style={{ marginTop: 6 }}>아직 말머리가 없습니다 — 추가하면 Videos 목록 왼쪽에 탭이 생깁니다</div>}
       <button className="btn btn-ghost" style={{ marginTop: 8, padding: '7px 14px', fontSize: 11 }}
         onClick={() => addVideoCat(vidSec)}>＋ 말머리 추가</button>
+      {/* 큰 그림 게시판 · 로드비 말머리 (v2.1 사용자 요청 — 말머리별로 모아보기) — 갤러리 말머리와 같은 모양 */}
+      {([
+        {
+          title: '큰 그림 말머리', desc: '큰 그림 게시판 글쓰기에서 고르는 말머리 — 목록 위 탭으로도 나옵니다',
+          secs: feedSecs, sec: feedSec, setSec: setFeedSec, cats: feedCatsOf(st, feedSec),
+          set: setFeedCats, patch: patchFeedCat, add: addFeedCat, remove: removeFeedCat,
+          // 작성자 이름 숨기기 (v2.1 사용자 요청) — 이 게시판의 목록·상세에서 글쓴이를 안 보여 준다
+          extra: (
+            <div style={{ marginTop: 12 }}>
+              <KCheck label={<span style={{ fontSize: 12 }}>작성자 이름 숨기기 — 이 게시판의 목록·상세에서 글쓴이를 표시하지 않습니다</span>}
+                checked={feedHideAuthorOf(st, feedSec)} onChange={v => setFeedHideAuthor(feedSec, v)} />
+            </div>
+          ),
+        },
+        {
+          title: '로드비 말머리', desc: '로드비에 그림을 올릴 때 고르는 말머리 — 목록 위 탭으로 모아 볼 수 있습니다 · 하나도 없으면 탭 없이 지금처럼',
+          secs: roadSecs, sec: roadSec, setSec: setRoadSec, cats: roadCatsOf(st, roadSec),
+          set: setRoadCats, patch: patchRoadCat, add: addRoadCat, remove: removeRoadCat,
+          extra: null as React.ReactNode,
+        },
+        {
+          // TRPG 리뷰 (v2.1 사용자 요청) — 페어별 말머리 + 둘이 따로 매기는 별점의 이름
+          title: 'TRPG 리뷰 말머리 (페어)', desc: 'TRPG 리뷰를 쓸 때 고르는 말머리 — 누구와 했는지(페어)별로 모아 봅니다 · 하나도 없으면 말머리 없이 씁니다',
+          secs: reviewSecs, sec: reviewSec, setSec: setReviewSec, cats: reviewCatsOf(st, reviewSec),
+          set: setReviewCats, patch: patchReviewCat, add: addReviewCat, remove: removeReviewCat,
+          extra: (
+            <div style={{ marginTop: 12, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span className="cp-lb">별점 이름</span>
+              <KInput value={st.reviewStars?.a ?? ''} placeholder="별점 1 (예: 푸딩)" onChange={e => setReviewStars({ a: e.target.value })} style={{ width: 150 }} />
+              <KInput value={st.reviewStars?.b ?? ''} placeholder="별점 2 (예: 곰주)" onChange={e => setReviewStars({ b: e.target.value })} style={{ width: 150 }} />
+              <small className="hint" style={{ margin: 0 }}>둘이 따로 매길 때 각 별점 앞에 붙는 이름</small>
+            </div>
+          ),
+        },
+      ]).map(blk => (
+        <React.Fragment key={blk.title}>
+          <h3 style={{ marginTop: 20 }}>{blk.title}</h3>
+          <div className="d">
+            {blk.desc}
+            {blk.secs.length > 1 && <><br />게시판마다 따로 정합니다 — <b>손대기 전까지는 기본 게시판의 말머리를 그대로 씁니다</b></>}
+          </div>
+          {blk.secs.length > 1 && (
+            <div className="mini-seg" style={{ flexWrap: 'wrap', marginBottom: 10 }}>
+              {blk.secs.map(s2 => (
+                <button key={s2.id} className={blk.sec === s2.id ? 'on' : ''} onClick={() => blk.setSec(s2.id)}>{s2.name}</button>
+              ))}
+            </div>
+          )}
+          <DragList items={blk.cats} keyOf={c => c.id} onReorder={next => blk.set(blk.sec, next)}
+            render={c => (
+              <div className="set-row" style={{ width: '100%' }}>
+                <div className="l" style={{ display: 'flex', gap: 11, alignItems: 'center' }}>
+                  <span className="drag-h">⠿</span>
+                  <span style={boardBadgeStyle(c)}>{c.label || '말머리'}</span>
+                </div>
+                <div className="cp-group" style={{ justifyContent: 'flex-end' }}>
+                  <KInput value={c.label} onChange={e => blk.patch(blk.sec, c.id, { label: e.target.value })}
+                    style={{ width: 100, textAlign: 'right' }} />
+                  {colorCells(c, p => blk.patch(blk.sec, c.id, p))}
+                  <span className="fx" data-tip="말머리 삭제"
+                    onClick={() => del.ask(`말머리 「${c.label}」를 삭제하시겠습니까?`,
+                      () => blk.remove(blk.sec, c.id),
+                      '이미 이 말머리로 등록된 글은 그대로 남습니다.')}>✕</span>
+                </div>
+              </div>
+            )} />
+          <button className="btn btn-ghost" style={{ marginTop: 8, padding: '7px 14px', fontSize: 11 }}
+            onClick={() => blk.add(blk.sec)}>＋ 말머리 추가</button>
+          {blk.extra}
+        </React.Fragment>
+      ))}
+
+      {/* 한 페이지 글 수 (v2.1 사용자 요청 — 「환경설정에서 페이지에 몇 개 보일지」) */}
+      <h3 style={{ marginTop: 20 }}>한 페이지에 보일 글 수</h3>
+      <div className="d">이 수를 넘으면 1·2·3… 페이지로 나뉩니다 (1~60)</div>
+      {([
+        { k: 'gallery' as const, label: '갤러리 (갤러리 보기)' }, { k: 'galleryList' as const, label: '갤러리 (리스트 보기)' },
+        { k: 'feed' as const, label: '큰 그림' }, { k: 'road' as const, label: '로드비' },
+      ]).map(row => (
+        <div key={row.k} className="set-row" style={{ alignItems: 'center' }}>
+          <div className="l"><b>{row.label}</b><small>기본 {PER_PAGE_DEFAULT[row.k]}개</small></div>
+          <KStep value={perPageOf(st, row.k)} min={1} max={60} suffix="개" onChange={v => setPerPage(row.k, v)} />
+        </div>
+      ))}
 
       <hr style={{ margin: '24px 0', border: 'none', borderTop: '1.5px solid var(--line)' }} />
       {/* 갤러리·다이어리 등도 여러 개로 (v2.0 사용자 요청) — 목록이 몇 개인지는 여기 한곳에서 */}
@@ -2431,15 +2529,17 @@ function MenuPane() {
       if (!sec) return null;
       secId = sec.id;
     }
-    // TRPG 캐릭터·플레이기록도 기본 가입자 (커플홈 사용자 제보: 같이 쓰는 오너가 TRPG 캐릭터 등록 권한이 없다 — 「모든 게시판 권한」 요청의 누락분)
+    // 게시판마다의 기본 글쓰기 권한 — writeDefaultOf (커플홈: 거의 다 가입자 — 「같이 쓰는 오너도 모든 게시판에」 · 내 자캐(/chars) 등록만 관리자)
     const def: MenuPerm | null =
-      path === '/tchars' || path === '/playlog' || path === '/videos' || path === '/threads' || path === '/dotori' || path === '/log' ? 'member'   // RP LOG — 등록 권한이 있는 회원은 수정도 (trpgPerm.ts)
+      ['/tchars', '/playlog', '/videos', '/threads', '/dotori', '/log', '/feed', '/chars', '/pchars', '/treview'].includes(path) ? writeDefaultOf(path)
+      // 스케줄러 — 달력의 「회원도 일정 등록 허용」 토글이 기본값, 여기서 멤버를 좁히거나 따로 정할 수 있다 (cm_260929 d9c7ce2)
+      : path === '/cal' ? (getSetting<{ allowMember?: boolean }>('ohome.sched.v1', {}).allowMember ? 'member' : 'admin')
       // 추가 로드비 — 기본 페이지의 공통값(roadUpload)을 따르되 따로 정할 수 있다 (기본 페이지는 아래 /loadb 가지에서)
       : path === '/loadb' && secId !== MAIN_SEC ? (ms.roadUpload === 'admin' ? 'admin' : 'member')
       : null;
     if (def === null) return null;
     const key = writeKeyOf(path, secId);
-    const what = path === '/loadb' ? '업로드' : path === '/tchars' || path === '/playlog' || path === '/dotori' || path === '/log' ? '등록' : '글쓰기';
+    const what = path === '/loadb' ? '업로드' : path === '/cal' ? '일정 등록' : ['/tchars', '/chars', '/pchars', '/playlog', '/dotori', '/log'].includes(path) ? '등록' : '글쓰기';
     return { key, perm: ms.writePerm?.[key] ?? def, what };
   };
 
@@ -2608,7 +2708,7 @@ function MenuPane() {
           <div className="d">
             공개범위는 메뉴 노출을 정합니다(전부 보임 / 비로그인 숨김 / 관리자만) — SAVE를 눌러야 반영 · 글쓰기·댓글 권한은 즉시 반영
             <br />
-            글쓰기 권한은 게시판마다(갤러리·리스트·로드비·Videos·감상타래·캐릭터·도토리·플레이기록) 가입자/관리자로 — <b>글쓰기 멤버</b>로 특정 회원만 쓰게 좁힐 수 있습니다
+            글쓰기 권한은 게시판마다(갤러리·큰 그림·리스트·로드비·Videos·감상타래·캐릭터·TRPG 캐릭터·도토리·플레이기록) 가입자/관리자로 — <b>글쓰기 멤버</b>로 특정 회원만 쓰게 좁힐 수 있습니다
             <br />
             「비로그인 숨김」 옆 <b>멤버 선택</b>으로 특정 회원에게만 보이게 좁힐 수 있습니다 — 비우면 로그인한 모든 회원
             <br />
@@ -2899,6 +2999,20 @@ function TrpgPane() {
   useEffect(() => { setLockDesc(getPageText('trpg-lock-desc', '비밀번호를 입력하면 열람할 수 있습니다')); }, []);
   const patchStatus = (k: DotoriStatus, p: Partial<(typeof settings.statuses)[DotoriStatus]>) =>
     patch({ statuses: { ...settings.statuses, [k]: { ...settings.statuses[k], ...p } } });
+  const statusKeys = dotoriStatusKeys(settings);
+  const del = useConfirmDelete();
+  // 상태 추가·삭제 (v2.1 사용자 요청) — 순서는 statusOrder에 적는다
+  const addStatus = () => {
+    const k = `st-${newId()}`;
+    patch({
+      statuses: { ...settings.statuses, [k]: { label: '새 상태', bg: '#7a8089', border: '#7a8089', fg: '#ffffff', badge: false, hideInAll: false } },
+      statusOrder: [...statusKeys, k],
+    });
+  };
+  const removeStatus = (k: string) => {
+    const rest = Object.fromEntries(Object.entries(settings.statuses).filter(([x]) => x !== k));
+    patch({ statuses: rest, statusOrder: statusKeys.filter(x => x !== k) });
+  };
   // 균등 칸 그리드 — 항목 폭이 라벨 길이에 안 흔들려 PC/모바일 두 줄이 세로로 정렬됨 (v1.9)
   const colToggle = (list: string[], k: keyof MenuSettings) => (
     <div style={{ flex: 1, display: 'grid', gridTemplateColumns: `repeat(${PLAYLOG_COLS.length}, 1fr)`, gap: 6, justifyItems: 'center' }}>
@@ -2921,15 +3035,15 @@ function TrpgPane() {
       </div>
 
       <h3>도토리 상태 카테고리</h3>
-      <div className="d">라벨과 뱃지 색(배경/테두리/글씨) — 카드 뱃지는 공수표·일정 확정만 표시</div>
-      {DOTORI_STATUS_KEYS.map(k => {
+      <div className="d">라벨과 뱃지 색(배경/테두리/글씨) · 「카드 뱃지」 = 카드 우상단에 표시 · 「전체에서 숨김」 = 전체 탭에서 빼기 — 상태를 더하거나 지울 수 있습니다 (v2.1)</div>
+      {statusKeys.map(k => {
         const st = settings.statuses[k];
         return (
-          <div key={k} className="set-row" style={{ alignItems: 'center' }}>
+          <div key={k} className="set-row" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <div className="l">
               <span className="dt-badge" style={{ ...dotoriBadgeStyle(st), position: 'static' }}>{st.label || '상태'}</span>
             </div>
-            <div className="cp-group" style={{ justifyContent: 'flex-end' }}>
+            <div className="cp-group" style={{ justifyContent: 'flex-end', flexWrap: 'wrap' }}>
               <KInput value={st.label} onChange={e => patchStatus(k, { label: e.target.value })}
                 style={{ width: 100, textAlign: 'right' }} />
               <span className="cp-lb">배경</span>
@@ -2938,10 +3052,19 @@ function TrpgPane() {
               <ColorField value={st.border} onChange={hex => patchStatus(k, { border: hex })} />
               <span className="cp-lb">글씨</span>
               <ColorField value={st.fg} onChange={hex => patchStatus(k, { fg: hex })} />
+              <KCheck label="카드 뱃지" checked={dotoriBadgeOn(settings, k)} onChange={v => patchStatus(k, { badge: v })} />
+              <KCheck label="전체에서 숨김" checked={dotoriHiddenInAll(settings, k)} onChange={v => patchStatus(k, { hideInAll: v })} />
+              {statusKeys.length > 1 && (
+                <span className="fx" data-tip="상태 삭제"
+                  onClick={() => del.ask(`상태 「${st.label}」를 삭제하시겠습니까?`, () => removeStatus(k),
+                    '이 상태였던 도토리는 그대로 남고, 카드의 STATUS에서 다른 상태로 바꿀 수 있습니다.')}>✕</span>
+              )}
             </div>
           </div>
         );
       })}
+      <button className="btn btn-ghost" style={{ marginTop: 8, padding: '7px 14px', fontSize: 11 }} onClick={addStatus}>＋ 상태 추가</button>
+      {del.element}
 
       {/* 플레이기록 표시 열 — PC/모바일 각각 (4.16 v1.8 · v1.9에서 TRPG 탭 하단 배치) */}
       <hr style={{ margin: '24px 0', border: 'none', borderTop: '1.5px solid var(--line)' }} />

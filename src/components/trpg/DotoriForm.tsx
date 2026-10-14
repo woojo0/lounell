@@ -1,7 +1,7 @@
 ﻿'use client';
 // 도토리 등록/수정 공용 폼 (4.15) — 16:9 이미지 + 시나리오 정보 + 상태
 import React, { useState } from 'react';
-import { DotoriItem, DotoriStatus, DOTORI_STATUS_KEYS, useTrpgSettings } from '@/lib/galleryStore';
+import { DotoriItem, DotoriStatus, dotoriStatusKeys, dotoriStatusOf, useTrpgSettings } from '@/lib/galleryStore';
 import { KInput, KSelect } from '@/components/ui/Kit';
 import { CropEditor, CropValue, CropImg, CroppedBlobImg } from '@/components/ui/CropEditor';
 import { putBlob } from '@/lib/blobStore';
@@ -92,7 +92,7 @@ export function DotoriForm({ initial, onSave, onCancel }: {
             <KInput placeholder="태그 — 쉼표로 구분" value={tags} onChange={e => setTags(e.target.value)} />
             <KInput placeholder="링크 (선택)" value={link} onChange={e => setLink(e.target.value)} />
             <KSelect value={status} onChange={v => setStatus(v as DotoriStatus)}
-              options={DOTORI_STATUS_KEYS.map(s => ({ value: s, label: trpgSet.statuses[s].label }))} />
+              options={dotoriStatusKeys(trpgSet).map(s => ({ value: s, label: dotoriStatusOf(trpgSet, s).label }))} />
             <p className="hint" style={{ margin: 0 }}>뱃지는 공수표·일정 확정만 카드에 표시 — 완은 완 탭에서만 보입니다</p>
           </div>
         </div>

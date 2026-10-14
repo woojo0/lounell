@@ -30,6 +30,8 @@ export interface ThemeVars {
   pageHeadM?: 'same' | 'none';
   // BGM 플레이어
   bgmBg: string; bgmFg: string; bgmIc: string; bgmVol: string;
+  /** 재생 중인 곡 글씨색 (v2.1 사용자 문의) — 비우면 포인트 컬러에서 밝게 파생한 색(--accent-soft) */
+  bgmOn?: string;
   // 스크롤바: 색 · 테두리색
   sbThumb: string; sbBd: string;
   // 검색창 (6.4 공통 검색): 배경 · 글씨 · 아이콘/플레이스홀더 · 테두리
@@ -55,8 +57,6 @@ export interface ThemeVars {
   focusColor?: string; focusRing?: 'glow' | 'line' | 'none'; focusW?: number;
   // 포인트 컬러
   accent: string; accentSoft: string;   // accentSoft는 저장값을 쓰지 않고 늘 accent에서 파생한다 (cm_260929 6cbb8f0 — 아래 softAccentOf)
-  /** 재생 중인 곡 글씨색 — 비우면 포인트 컬러에서 밝게 파생한 색(--accent-soft) */
-  bgmOn?: string;
   // 모서리 둥글기(px)
   radius: number; radiusS: number;
   // 블록(패널·카드) 그림자 세기 % — 0 = 없음, 100 = 기본, 200 = 최대
@@ -248,12 +248,12 @@ export function themeToCssVars(t: ThemeVars): Record<string, string> {
     '--ph-desc-m': (t.pageHeadM ?? 'same') === 'none' ? 'none'
       : ((t.pageHead ?? 'both') === 'both' || t.pageHead === 'desc' ? 'block' : 'none'),
     '--bgm-bg': withAlpha(t.bgmBg, 0.9), '--bgm-fg': t.bgmFg, '--bgm-ic': t.bgmIc, '--bgm-vol': t.bgmVol,
+    '--bgm-on': t.bgmOn ?? softAccentOf(t.accent),   // 재생 중 곡 (v2.1) — 비우면 연한 포인트색
     '--sb-thumb': t.sbThumb, '--sb-bd': t.sbBd,
     '--search-bg': t.searchBg ?? '#232830', '--search-fg': t.searchFg ?? '#e8eaee',
     '--search-ic': t.searchIc ?? '#8b919b', '--search-bd': t.searchBd ?? '#3a404a',
     // 저장된 accentSoft는 쓰지 않는다 — 세부 모드에서 포인트만 바꾸면 옛 파생값이 남아 「적용한 적 없는 색」이 호버·BGM 재생 곡에 나왔다
     '--accent': t.accent, '--accent-soft': softAccentOf(t.accent),
-    '--bgm-on': t.bgmOn ?? softAccentOf(t.accent),   // 재생 중 곡 — 비우면 연한 포인트색
     // 진한 버튼 3색 — 호버 미지정 시 배경에서 살짝 밝게 자동 파생
     '--btn-dark': t.btnDark ?? '#1d2025',
     '--btn-dark-fg': t.btnDarkFg ?? '#ffffff',

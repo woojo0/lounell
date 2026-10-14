@@ -135,6 +135,7 @@ declare content_tables text[] := array[
   'characters',   -- 캐릭터
   'relations',    -- 자관
   'gallery',      -- 그림 백업(갤러리)
+  'feed',         -- 큰 그림 게시판 (v2.1 — 게시물이 하나씩 크게 뜨는 피드형)
   'roadview',     -- 로드뷰
   'trpg_logs',        -- TRPG 로그(목록 문서 — 본문 제외)
   'trpg_log_bodies',  -- TRPG 로그 본문 (v2.0, 목록과 분리 저장 — 나만보기 로그의 본문 보호용)
@@ -156,7 +157,8 @@ declare content_tables text[] := array[
   'videos',       -- Videos 게시판 (커플홈 — 영상 하나를 파일·링크로)
   'notifications', -- 알림 (v2.0 — 기기 보관이던 것을 서버로: 받은 사람 계정으로 어느 기기에서나)
   'push_subs',     -- 웹푸시 기기 구독 (커플홈 — 회원끼리 읽힌다: 보내는 쪽이 받는 사람 구독을 읽어야. 서버 개인키 없이는 못 보낸다)
-  'sched_events'   -- 스케줄러 일정 (회원도 등록하게 설정이 아니라 자기 행으로)
+  'sched_events',  -- 스케줄러 일정 (회원도 등록하게 설정이 아니라 자기 행으로)
+  'trpg_reviews'   -- TRPG 리뷰 (cm_260929 6eb5c56 — 시나리오마다 별점 + 한줄 평)
 ];
 begin
   foreach t in array content_tables loop

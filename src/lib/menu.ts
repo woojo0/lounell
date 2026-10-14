@@ -12,15 +12,18 @@ export interface MenuItem {
 // 커플홈 — /chars(캐릭터 목록)는 두지 않는다. 캐릭터는 자관 페이지의 멤버 카드에서 연다. 방명록(/guest)도 제거
 export const FEATURES: { href: string; label: string }[] = [
   { href: '/rels', label: '자관' },
+  { href: '/pchars', label: '상대 캐릭터' },   // 상대 캐릭터 리스트 (cm_260929 acc3537) — 메뉴 관리에서 직접 배치 (커플홈 기본 메뉴에는 목록 페이지를 두지 않는다)
   { href: '/rp', label: '역극' },
   { href: '/board', label: '리스트' },
   { href: '/gallery', label: '갤러리' },
   { href: '/videos', label: 'Videos' },   // 영상 게시판 (커플홈)
+  { href: '/feed', label: '큰 그림' },   // 큰 그림 게시판 (v2.1) — 게시물이 하나씩 크게
   { href: '/loadb', label: '로드비' },
   { href: '/tchars', label: '캐릭터' },   // TRPG 캐릭터 — 자놀 캐릭터와는 href로 구분
   { href: '/log', label: 'RP LOG' },    // 로그 백업 — 커플홈에서 이름을 RP LOG로, 주소도 /log 로 (옛 /trpg 는 자동 이동)
   { href: '/dotori', label: '도토리' },
   { href: '/playlog', label: '플레이기록' },
+  { href: '/treview', label: 'TRPG 리뷰' },   // TRPG 리뷰 (v2.1)
   { href: '/cal', label: '스케줄러' },
   { href: '/diary', label: '다이어리' },
   { href: '/threads', label: '감상타래' },
@@ -43,6 +46,7 @@ export const DEFAULT_MENU: MenuItem[] = [
       { label: '리스트', href: '/board' },
       { label: '갤러리', href: '/gallery' },
       { label: 'Videos', href: '/videos' },
+      { label: '큰 그림', href: '/feed' },
       { label: '로드비', href: '/loadb' },
     ],
   },
@@ -52,6 +56,7 @@ export const DEFAULT_MENU: MenuItem[] = [
       { label: '캐릭터', href: '/tchars' },
       { label: '도토리', href: '/dotori' },
       { label: '플레이기록', href: '/playlog' },
+      { label: 'TRPG 리뷰', href: '/treview' },
     ],
   },
   {

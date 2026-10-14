@@ -64,6 +64,7 @@ export interface RelFormValue {
   nameBolds?: Record<string, boolean>;                          // 멤버 카드 이름 볼드 (v2.0 — 기본 켜짐)
   quoteColors?: Record<string, { fg?: string; mark?: string }>; // 히어로 대사 글씨/따옴표색 (페어, v1.9)
   fullFront?: string;                          // 앞에 보일 캐릭터 id
+  illustMode?: 'duo' | 'one';                  // 처음 보이는 이미지 — 전신(duo) / 일러스트(one) (v2.1 사용자 요청)
   auName?: string;           // AU별 자관명 (v2.0 사용자 요청 — AU 편집일 때만)
   auSlug?: string;           // AU 페이지 주소 별명 (커플홈 — AU 편집일 때만) /rels/{자관}?au={slug}
   qaHide?: boolean;          // 문답 답변 숨기기 (v2.0 사용자 요청)
@@ -199,7 +200,7 @@ export function RelForm({ initial, auId, myChars, memberNames, existingIds, onSa
     const refs = auObj ? (auObj.arts ?? []) : (initial?.arts ?? (initial?.thumbId ? [initial.thumbId] : []));
     return refs.map(r => ({ id: newId(), ref: r }));
   });
-  const [thumbCrop, setThumbCrop] = useState<CropValue | undefined>(initial?.thumbCrop);
+  const [thumbCrop, setThumbCrop] = useState<CropValue | undefined>(auObj ? auObj.thumbCrop : initial?.thumbCrop);   // AU 편집이면 그 AU 네모(1:1) 위치 (v2.1)
   const [cropOpen, setCropOpen] = useState(false);
   const [lb, setLb] = useState<number | null>(null);   // 아트 썸네일 클릭 → 원본 보기
   const [headerFile, setHeaderFile] = useState<File | null>(null);
@@ -225,6 +226,8 @@ export function RelForm({ initial, auId, myChars, memberNames, existingIds, onSa
   const [illuCustom, setIlluCustom] = useState(!!(st?.illuBg || st?.illuOn));
   const [illuBg, setIlluBg] = useState(st?.illuBg ?? '#1d2025');
   const [illuOn, setIlluOn] = useState(st?.illuOn ?? '#a63a45');
+  // 처음 보이는 이미지 (v2.1 사용자 요청) — 페어 자관 페이지를 열었을 때 전신 2장인지 대표 일러스트인지. AU 편집이면 그 AU 값
+  const [illustMode, setIllustMode] = useState<'duo' | 'one'>(auObj?.illustMode ?? initial?.illustMode ?? 'duo');
   // 자관명·캐치프레이즈 글씨색 (v1.9 사용자 요청) — 직접 지정 안 하면 테마색
   const [txtCustom, setTxtCustom] = useState(!!(st?.nameColor || st?.cpColor));
   const [nameColor, setNameColor] = useState(st?.nameColor ?? '#e8eaee');
@@ -358,6 +361,7 @@ export function RelForm({ initial, auId, myChars, memberNames, existingIds, onSa
       headerBlur: headerRemoved ? undefined : headerBlur,
       headerRemoved,
       themeFollow,
+      illustMode,
       illuBg: illuCustom ? illuBg : undefined,
       illuOn: illuCustom ? illuOn : undefined,
       nameColor: txtCustom ? nameColor : undefined,
@@ -462,7 +466,7 @@ export function RelForm({ initial, auId, myChars, memberNames, existingIds, onSa
         {/* 아트 다중 등록 — 첫 장 = 대표 · 리스트 썸네일(4:3 크롭) */}
         <label className="k-label" style={{ margin: 0 }}>
           {auObj ? `아트 — ${auObj.label} AU 일러` : '아트'} <span style={{ fontWeight: 400, color: 'var(--faint)' }}>
-            {auObj ? '— 이 AU를 선택했을 때의 중앙 일러' : '— 첫 장이 대표 · 리스트 썸네일은 첫 장에서 4:3 크롭 · 상세 일러스트 모드에서 넘겨보기'}</span>
+            {auObj ? '— 이 AU를 선택했을 때의 중앙 일러 · 첫 장은 자관 페이지 AU 네모의 썸네일(1:1 크롭)' : '— 첫 장이 대표 · 리스트 썸네일은 첫 장에서 4:3 크롭 · 상세 일러스트 모드에서 넘겨보기'}</span>
         </label>
         {arts.length > 0 && (
           <DragList items={arts} keyOf={a => a.id} onReorder={setArts}
@@ -898,6 +902,15 @@ export function RelForm({ initial, auId, myChars, memberNames, existingIds, onSa
                 )}
               </div>
             )}
+            {/* 처음 보이는 이미지 (v2.1 사용자 요청) — 전신 / 일러스트. 전신이 하나도 없으면 일러스트만 보인다 */}
+            <div>
+              <span className="cp-lb" style={{ display: 'block', marginBottom: 6 }}>처음 보이는 이미지{auObj ? ' (이 AU)' : ''}</span>
+              <div className="mini-seg">
+                <button className={illustMode === 'duo' ? 'on' : ''} onClick={() => setIllustMode('duo')}>전신</button>
+                <button className={illustMode === 'one' ? 'on' : ''} onClick={() => setIllustMode('one')}>일러스트</button>
+              </div>
+              <small className="hint" style={{ display: 'block', marginTop: 4 }}>페이지를 열었을 때 먼저 보이는 쪽 — 스위치로 언제든 바꿔 볼 수 있습니다. 전신이 없으면 일러스트만 보입니다</small>
+            </div>
             {/* 전신/일러 스위치 색 (v1.9 사용자 요청) — 페어 중앙 이미지의 전환 스위치. AU마다 따로 (v2.0) */}
             {(
               <div>
@@ -930,7 +943,7 @@ export function RelForm({ initial, auId, myChars, memberNames, existingIds, onSa
       </div>
 
       {arts[0] && cropOpen && (
-        <FirstArtCrop open={cropOpen} item={arts[0]} crop={thumbCrop}
+        <FirstArtCrop open={cropOpen} item={arts[0]} crop={thumbCrop} aspect={auObj ? '1:1' : '4:3'}
           onClose={() => setCropOpen(false)}
           onApply={c => { setThumbCrop(c); setCropOpen(false); }} />
       )}
@@ -965,8 +978,9 @@ function HeaderCrop({ src, refId, crop, onClose, onApply }: {
 }
 
 /** 첫 아트(새 파일 또는 저장된 blob)를 소스로 4:3 크롭 편집기 */
-function FirstArtCrop({ open, item, crop, onClose, onApply }: {
+function FirstArtCrop({ open, item, crop, aspect, onClose, onApply }: {
   open: boolean; item: ArtItem; crop?: CropValue;
+  aspect?: '4:3' | '1:1';   // 원본: 리스트 썸네일 4:3 · AU: AU 네모 1:1 (v2.1)
   onClose: () => void; onApply: (c: CropValue) => void;
 }) {
   const [loadedUrl, setLoadedUrl] = useState('');
@@ -976,5 +990,5 @@ function FirstArtCrop({ open, item, crop, onClose, onApply }: {
   }, [item, open]);
   const src = item.url || loadedUrl;
   if (!src) return null;
-  return <CropEditor open={open} src={src} aspect="4:3" initial={crop} onClose={onClose} onApply={onApply} />;
+  return <CropEditor open={open} src={src} aspect={aspect ?? '4:3'} aspectLabel={aspect === '1:1' ? 'AU 네모 (1:1)' : undefined} initial={crop} onClose={onClose} onApply={onApply} />;
 }

@@ -6,9 +6,9 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { useLocalList, newId, FoldType } from '@/lib/postStore';
 import { useSectionParam, secStamp, MAIN_SEC, useSectionTitle } from '@/lib/sectionStore';
-import { useMenuSettings, canGalleryWrite } from '@/lib/menuStore';
-import { BackupPost, BACKUP_SEED } from '@/lib/galleryStore';
-import { useBoardSettings, galleryCatsOf } from '@/lib/boardStore';
+import { useMenuSettings, canGalleryWrite, canWriteAt, writeKeyOf } from '@/lib/menuStore';
+import { BackupPost, BACKUP_SEED, FEED_KEY, FEED_SEED } from '@/lib/galleryStore';
+import { useBoardSettings, galleryCatsOf, feedCatsOf } from '@/lib/boardStore';
 import { useConfirmDelete } from '@/components/ui/Modal';
 import { Visibility } from '@/lib/charStore';
 import { KInput, KSelect, KRadio, KCheck, KDate } from '@/components/ui/Kit';
@@ -44,27 +44,35 @@ function CropModal({ f, onClose, onApply }: { f: UpFile; onClose: () => void; on
   return <CropEditor open src={src} aspect="4:3" initial={f.crop} onClose={onClose} onApply={onApply} />;
 }
 
-export function BackupForm({ initial }: { initial: BackupPost | null }) {
+/** kind (v2.1) — 'gallery'(그림백업) / 'feed'(큰 그림 게시판). 글 모양은 같고 저장 자리·말머리·권한·돌아갈 곳만 다르다 */
+export function BackupForm({ initial, kind = 'gallery' }: { initial: BackupPost | null; kind?: 'gallery' | 'feed' }) {
   const router = useRouter();
   const { user, isAdmin } = useAuth();
+  const feed = kind === 'feed';
   // 갤러리 글쓰기 권한 (v2.0 사용자 요청) — 아래 새 글 가드에서 확인
   const [menuSet, , menuLoaded] = useMenuSettings();
   const toast = useToast();
-  const [posts, setPosts] = useLocalList<BackupPost>('ohome.backup.v1', BACKUP_SEED);
+  const [posts, setPosts] = useLocalList<BackupPost>(feed ? FEED_KEY : 'ohome.backup.v1', feed ? FEED_SEED : BACKUP_SEED);
   // 어느 갤러리에서 눌러 왔는지 (v2.0) — 새 글을 그 목록에 넣고, 끝나면 그 목록으로 돌아간다
-  const sec = useSectionParam('gallery');
+  const sec = useSectionParam(kind);
   const isNew = !initial;
   // 큰 글씨 — 추가 갤러리면 그 이름(메뉴 타이틀·이름이 우선), 누르면 그 목록으로 (v2.0 사용자 제보).
   // 수정 주소에는 ?s=가 없으므로 고치는 글 자신의 소속(secId)에서 읽는다
-  const tt = useSectionTitle('gallery', initial ? (initial.secId ?? MAIN_SEC) : sec.id, isNew ? 'WRITE' : 'EDIT');
+  const tt = useSectionTitle(kind, initial ? (initial.secId ?? MAIN_SEC) : sec.id, isNew ? 'WRITE' : 'EDIT');
   const [title, setTitle] = useState(initial?.title ?? '');
-  const [type, setType] = useState<'log' | 'single' | 'vlist'>(initial?.type ?? 'log');
+  // 큰 그림 게시판은 유형을 고르지 않는다 — 늘 세로 나열(이미지 사이 갭, 클릭 확대)
+  const [type, setType] = useState<'log' | 'single' | 'vlist'>(initial?.type ?? (feed ? 'vlist' : 'log'));
   const [files, setFiles] = useState<UpFile[]>(() =>
     (initial?.images ?? []).map((ref, i) => ({
       id: newId(), name: `이미지 ${i + 1}`, ref, original: true,
       crop: i === 0 ? initial?.thumbCrop : undefined,
     })));
   const [desc, setDesc] = useState(initial?.desc ?? '');
+  // 썸네일 (v2.1 사용자 요청) — 본문 첫 이미지에서 잘라 쓰거나, 본문에 안 나오는 썸네일 전용 이미지를 따로 올린다 (택1)
+  const [thumbMode, setThumbMode] = useState<'body' | 'own'>(initial?.thumbId ? 'own' : 'body');
+  const [ownThumb, setOwnThumb] = useState<UpFile | null>(() => (initial?.thumbId
+    ? { id: 'own-thumb', name: '썸네일 전용 이미지', ref: initial.thumbId, original: true, crop: initial.thumbCrop }
+    : null));
   const del = useConfirmDelete();   // 이미지 제거도 되돌릴 수 없어 경고를 거친다
   // 갤러리 말머리 — 환경설정 > 게시판 관리에서 관리 (v2.0)
   const { st: boardSet } = useBoardSettings();
@@ -72,11 +80,11 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
      수정 주소에는 `?s=`가 없어서 주소만 보면 늘 기본 섹션으로 읽힌다. 그러면 분류 목록이
      기본 섹션 것으로 바뀌어, 원래 고른 분류가 목록에 없으니 첫 항목으로 풀려 버린다. */
   const secId = initial ? (initial.secId ?? MAIN_SEC) : sec.id;
-  // 갤러리마다 말머리가 다르다 (v2.0 사용자 요청) — 보고 있는 갤러리 것을 쓴다
+  // 갤러리마다 말머리가 다르다 (v2.0 사용자 요청) — 보고 있는 갤러리 것을 쓴다 (큰 그림 게시판은 자기 말머리 — cm_260929 ccd82ac)
   /* 환경설정에 등록한 말머리만 (커플홈 사용자 제보 — 「고르지도 않았는데 등록한 적 없는 '합작'이 붙는다」).
      예전에는 목록이 비면 기본 4종(합작·낙서…)으로 채우고 첫 것을 자동으로 골랐다. 이제 비면 「말머리 없음」뿐이고,
      기본값도 「없음」이다 */
-  const galleryCats = galleryCatsOf(boardSet, secId);
+  const galleryCats = feed ? feedCatsOf(boardSet, secId) : galleryCatsOf(boardSet, secId);
   const [category, setCategory] = useState(initial?.category ?? '');
   // 태그 (v2.0 사용자 요청) — 쉼표로 구분해 입력, 저장할 때 배열로
   const [tagsText, setTagsText] = useState((initial?.tags ?? []).join(', '));
@@ -100,10 +108,13 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
      새 글만이다 — 이미 쓴 자기 글의 수정·삭제는 지금까지처럼 본인(과 관리자) 몫.
      설정을 읽기 전에는 폼을 그리지 않는다 — 먼저 그리면 막힐 사람에게 폼이 한 번 비친다 */
   if (isNew && !menuLoaded) return <section className="page" />;
-  if (isNew && !canGalleryWrite(menuSet, sec.id, { loggedIn: true, isAdmin, id: user.id })) {
+  const viewer = { loggedIn: true, isAdmin, id: user.id };
+  // 큰 그림 게시판은 다른 게시판처럼 환경설정 「권한」의 writePerm을 본다 (v2.1)
+  const allowed = feed ? canWriteAt(menuSet, writeKeyOf('/feed', sec.id), viewer) : canGalleryWrite(menuSet, sec.id, viewer);
+  if (isNew && !allowed) {
     return (
       <section className="page">
-        <div className="page-head"><PageTitle href={tt.href}>{tt.title}</PageTitle><p>허용된 회원만 글을 쓸 수 있는 갤러리입니다</p></div>
+        <div className="page-head"><PageTitle href={tt.href}>{tt.title}</PageTitle><p>허용된 회원만 글을 쓸 수 있는 {feed ? '게시판' : '갤러리'}입니다</p></div>
       </section>
     );
   }
@@ -122,11 +133,15 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
     if (!title.trim()) { toast('제목을 입력해 주세요'); return; }
     // 이미지 실저장 (IndexedDB) — 기존 ref는 유지, 새 파일만 저장
     const imageIds = await Promise.all(files.map(f => (f.file ? putBlob(f.file) : Promise.resolve(f.ref!))));
+    // 썸네일 전용 이미지 (v2.1) — 고른 경우에만 저장, 크롭도 그 이미지 기준
+    const ownId = thumbMode === 'own' && ownThumb ? (ownThumb.file ? await putBlob(ownThumb.file) : ownThumb.ref) : undefined;
+    const thumbCrop = ownId ? ownThumb?.crop : files[0]?.crop;
     if (isNew) {
       const p: BackupPost = {
         id: newId(), title: title.trim(), type,
         images: imageIds, phList: files.length ? [] : ['cool'],
-        thumbCrop: files[0]?.crop, // 대표 이미지 크롭 (6.1)
+        thumbCrop, // 대표 이미지(또는 썸네일 전용 이미지) 크롭 (6.1 · v2.1)
+        thumbId: ownId,
         desc, category, tags: parseTags(tagsText), madeDate: madeDate || undefined,
         date: new Date().toISOString(), author: user.nickname, authorId: user.id,
         visibility,
@@ -134,23 +149,29 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
       };
       setPosts([{ ...p, ...secStamp(sec.id) }, ...posts]);
       toast('등록되었습니다 — 이미지는 이 브라우저에 실제 저장됩니다');
-      router.push(`/gallery/${p.id}`);
+      router.push(`/${kind}/${p.id}`);
     } else {
       setPosts(posts.map(x => x.id === initial.id ? {
         ...x, title: title.trim(), type,
         images: imageIds, phList: files.length ? [] : x.phList,
-        thumbCrop: files[0]?.crop,
+        thumbCrop,
+        thumbId: ownId,
         desc, category, tags: parseTags(tagsText), madeDate: madeDate || undefined, visibility,
         fold: foldType === 'none' ? null : { type: foldType, label: foldType === 'custom' ? foldLabel : undefined },
       } : x));
       toast('저장되었습니다');
-      router.push(`/gallery/${initial.id}`);
+      router.push(`/${kind}/${initial.id}`);
     }
   };
 
   return (
     <section className="page">
-      <div className="page-head"><PageTitle href={tt.href}>{tt.title}</PageTitle><EditableDesc k={isNew ? 'backup-write-desc' : 'backup-edit-desc'} def={isNew ? '그림백업 글 작성' : '그림백업 글 수정'} /></div>
+      <div className="page-head">
+        <PageTitle href={tt.href}>{tt.title}</PageTitle>
+        {feed
+          ? <EditableDesc k={isNew ? 'feed-write-desc' : 'feed-edit-desc'} def={isNew ? '큰 그림 글 작성 — 첫 이미지가 목록에 크게 나옵니다' : '큰 그림 글 수정'} />
+          : <EditableDesc k={isNew ? 'backup-write-desc' : 'backup-edit-desc'} def={isNew ? '그림백업 글 작성' : '그림백업 글 수정'} />}
+      </div>
       <div className="write-grid">
         {/* 좌: 본문 */}
         <div className="panel" style={{ padding: 24 }}>
@@ -158,7 +179,8 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
             <label className="k-label" style={{ width: 60 }}>제목</label>
             <KInput value={title} onChange={e => setTitle(e.target.value)} style={{ flex: 1 }} />
           </div>
-          <div className="form-row">
+          {/* 유형 — 큰 그림 게시판에는 없다 (늘 세로 나열, v2.1) */}
+          {!feed && <div className="form-row">
             <label className="k-label" style={{ width: 60 }}>유형</label>
             {/* 모바일에서는 설명(.rd-desc)을 숨겨 한 줄 유지 — 두 줄로 넘어가면 안 예쁨 (v1.9 사용자 확정) */}
             <div style={{ display: 'flex', gap: 18, alignItems: 'center' }}>
@@ -169,7 +191,7 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
               <KRadio name="wtype" value="vlist" current={type} onChange={v => setType(v as 'vlist')}
                 label={<span>단일(세로) <span className="rd-desc">— 이미지 사이 갭을 두고 세로로 나열</span></span>} />
             </div>
-          </div>
+          </div>}
           <label className="k-label">이미지</label>
           <div className="upzone" onClick={() => document.getElementById('bkFiles')?.click()}
             onDragOver={e => e.preventDefault()}
@@ -212,6 +234,37 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
               </div>
             )}
           />
+          {/* 썸네일 (v2.1 사용자 요청) — 본문 이미지 조절 / 썸네일 전용 이미지 택1 */}
+          <div style={{ marginTop: 14 }}>
+            <label className="k-label">썸네일</label>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div className="mini-seg">
+                <button className={thumbMode === 'body' ? 'on' : ''} onClick={() => setThumbMode('body')}>본문 첫 이미지</button>
+                <button className={thumbMode === 'own' ? 'on' : ''} onClick={() => setThumbMode('own')}>썸네일 전용 이미지</button>
+              </div>
+              {thumbMode === 'body' && <small className="hint" style={{ margin: 0 }}>첫 이미지에서 잘라 씁니다 — 위 목록의 ✂ 썸네일로 영역 조절</small>}
+              {thumbMode === 'own' && (
+                <>
+                  <input id="bkThumb" type="file" accept="image/*" style={{ display: 'none' }}
+                    onChange={e => {
+                      const x = e.target.files?.[0]; e.target.value = '';
+                      if (x) setOwnThumb({ id: 'own-thumb', name: x.name, size: x.size, url: URL.createObjectURL(x), file: x, original: true });
+                    }} />
+                  <button className="btn btn-ghost" style={{ padding: '5px 12px', fontSize: 11 }}
+                    onClick={() => document.getElementById('bkThumb')?.click()}>{ownThumb ? '이미지 바꾸기' : '＋ 썸네일 이미지'}</button>
+                  {ownThumb && (
+                    <>
+                      <div className="pv" style={{ width: 64, aspectRatio: '4/3', borderRadius: 7, overflow: 'hidden', position: 'relative' }}><FilePreview f={ownThumb} /></div>
+                      <button className="btn btn-ghost" style={{ padding: '5px 10px', fontSize: 10, whiteSpace: 'nowrap' }}
+                        onClick={() => setCropFor(ownThumb)}>✂ 썸네일{ownThumb.crop ? ' ·지정됨' : ''}</button>
+                      <span className="fx" data-tip="썸네일 이미지 제거" onClick={() => setOwnThumb(null)}>✕</span>
+                    </>
+                  )}
+                  <small className="hint" style={{ margin: 0 }}>본문에는 나오지 않고 목록 썸네일로만 쓰입니다</small>
+                </>
+              )}
+            </div>
+          </div>
           <div style={{ marginTop: 14 }}>
             <label className="k-label">설명</label>
             <RichEditor value={desc} onChange={setDesc} placeholder='작품 설명을 작성하세요 (선택)' />
@@ -263,7 +316,7 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
           </div>
           <div className="form-actions">
             <button className="btn btn-onbk"
-              onClick={() => router.push(isNew ? tt.href : `/gallery/${initial.id}`)}>CANCEL</button>
+              onClick={() => router.push(isNew ? tt.href : `/${kind}/${initial.id}`)}>CANCEL</button>
             <button className="btn btn-accent" onClick={post}>
               {isNew ? 'POST' : 'SAVE'}
             </button>
@@ -276,7 +329,8 @@ export function BackupForm({ initial }: { initial: BackupPost | null }) {
         <CropModal f={cropFor}
           onClose={() => setCropFor(null)}
           onApply={c => {
-            setFiles(l => l.map(x => x.id === cropFor.id ? { ...x, crop: c } : x));
+            if (cropFor.id === 'own-thumb') setOwnThumb(t => (t ? { ...t, crop: c } : t));   // 썸네일 전용 이미지 (v2.1)
+            else setFiles(l => l.map(x => x.id === cropFor.id ? { ...x, crop: c } : x));
             setCropFor(null);
             toast('썸네일 영역이 저장되었습니다 (원본 유지)');
           }} />

@@ -7,7 +7,7 @@ import { useSectionParam, filterSection, sectionSetter, secQuery } from '@/lib/s
 import { useMenuSettings, canWriteAt, writeKeyOf } from '@/lib/menuStore';
 import { useLocalList } from '@/lib/postStore';
 import {
-  DotoriItem, DotoriStatus, DOTORI_SEED, DOTORI_STATUS_KEYS, useTrpgSettings, dotoriBadgeStyle,
+  DotoriItem, DotoriStatus, DOTORI_SEED, dotoriStatusKeys, dotoriStatusOf, dotoriBadgeOn, dotoriHiddenInAll, useTrpgSettings, dotoriBadgeStyle,
 } from '@/lib/galleryStore';
 import { SearchBar, Pager } from '@/components/ui/Kit';
 import { OrderMenu, orderNoOf, moveToOrder } from '@/components/ui/OrderMenu';
@@ -39,19 +39,19 @@ function DotoriPageInner() {
   // 필터 탭 — 라벨은 환경설정 TRPG 탭에서 수정 (v1.9)
   const TABS: { key: Tab; label: string }[] = [
     { key: 'all', label: '전체' },
-    ...DOTORI_STATUS_KEYS.map(k => ({ key: k as Tab, label: trpgSet.statuses[k].label })),
+    ...dotoriStatusKeys(trpgSet).map(k => ({ key: k as Tab, label: dotoriStatusOf(trpgSet, k).label })),   // 추가·삭제한 상태까지 (v2.1)
   ];
 
   const query = q.trim().toLowerCase();
   const shown = items
-    .filter(it => (tab === 'all' ? it.status !== 'done' : it.status === tab)) // 완은 전체에서 숨김 (4.15)
+    .filter(it => (tab === 'all' ? !dotoriHiddenInAll(trpgSet, it.status) : it.status === tab)) // 전체 탭에서 숨길 상태(기본: 완)는 빼고 (4.15 · v2.1)
     .filter(it => !query
       || it.name.toLowerCase().includes(query)
       || it.writer.toLowerCase().includes(query)
       || it.tags.some(t => t.toLowerCase().includes(query)));
 
   const countOf = (t: Tab) =>
-    items.filter(it => (t === 'all' ? it.status !== 'done' : it.status === t)).length;
+    items.filter(it => (t === 'all' ? !dotoriHiddenInAll(trpgSet, it.status) : it.status === t)).length;
 
   // 일반 회원도 등록한다 (커플홈 사용자 요청) — 수정·삭제·상태 전환은 등록한 본인과 관리자.
   // 등록자 기록이 없는 옛 항목은 관리자 것. 카드 드래그 정렬(편집모드)은 그대로 관리자만
@@ -121,9 +121,9 @@ function DotoriPageInner() {
             <div className="th">
               <CroppedBlobImg fileRef={it.imgId} crop={it.thumbCrop} ph={it.ph} />
               {/* 뱃지 — 공수표·일정 확정만, 이미지 우상단 (4.15) */}
-              {(it.status === 'pledge' || it.status === 'confirmed') && (
-                <span className="dt-badge" style={dotoriBadgeStyle(trpgSet.statuses[it.status])}>
-                  {trpgSet.statuses[it.status].label}
+              {dotoriBadgeOn(trpgSet, it.status) && (
+                <span className="dt-badge" style={dotoriBadgeStyle(dotoriStatusOf(trpgSet, it.status))}>
+                  {dotoriStatusOf(trpgSet, it.status).label}
                 </span>
               )}
               {canEdit(it) && (
@@ -135,10 +135,10 @@ function DotoriPageInner() {
               {/* 상태 전환 팝업 — [상태] 클릭 시에만 (기본 UI에는 미노출) */}
               {statusFor === it.id && (
                 <div className="dt-status-pop" onClick={e => e.stopPropagation()}>
-                  {DOTORI_STATUS_KEYS.map(s => (
+                  {dotoriStatusKeys(trpgSet).map(s => (
                     <button key={s} className={it.status === s ? 'on' : ''}
                       onClick={() => { setStatus(it.id, s); setStatusFor(null); }}>
-                      {trpgSet.statuses[s].label}
+                      {dotoriStatusOf(trpgSet, s).label}
                     </button>
                   ))}
                 </div>

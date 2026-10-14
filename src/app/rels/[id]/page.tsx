@@ -275,6 +275,8 @@ export default function RelDetailPage() {
   const [qNote, setQNote] = useState<{ no: number; text: string } | null>(null);
   // 멤버 얼굴칸(1:1) 크롭 편집 (v2.0)
   const [faceEdit, setFaceEdit] = useState<{ charId: string; ref: string; crop?: CropValue } | null>(null);
+  // AU 네모(원본·AU) 썸네일 위치 편집 (v2.1 사용자 요청) — 네모 우클릭
+  const [chipEdit, setChipEdit] = useState<{ auId: string; ref: string; crop?: CropValue } | null>(null);
   // 타임라인 항목 우클릭 메뉴 (v2.0 사용자 요청) — 수정·삭제. 늘 떠 있는 [삭제] 글자는 없앴다
   const [tlCtx, setTlCtx] = useState<{ x: number; y: number; idx: number } | null>(null);
   const [tlEditIdx, setTlEditIdx] = useState<number | null>(null);   // null이면 새로 추가
@@ -501,7 +503,8 @@ export default function RelDetailPage() {
   const fullRefOf = (cid: string) =>
     (isBaseAu ? rel?.members.find(x => x.charId === cid)?.fullImgId : au?.fulls?.[cid]);
   const hasFull = !!rel?.members.some(m => fullRefOf(m.charId));
-  const single = hasFull ? (oneMode ?? rel?.illustMode === 'one') : true;
+  // 처음 보이는 쪽 — AU에 정한 값이 있으면 그것, 없으면 자관 기본 (v2.1 사용자 요청 — 수정 화면에서 정한다)
+  const single = hasFull ? (oneMode ?? ((isBaseAu ? rel?.illustMode : (au?.illustMode ?? rel?.illustMode)) === 'one')) : true;
 
   // 멤버 캐릭터 — AU 선택 시 그 캐릭터의 AU 프로필(이름·사진 등)로 합성해 표시 (v1.9)
   const auCharKey = rel && !isBaseAu && au ? `${rel.id}:${au.id}` : null;
@@ -825,6 +828,11 @@ export default function RelDetailPage() {
   };
 
   /** 얼굴칸(1:1) 크롭 다시 잡기 — 캐릭터의 3:4 썸네일과 별개로 이 자관에만 저장 (v2.0) */
+  /** AU 네모 썸네일 위치 저장 (v2.1) — 원본 네모는 자관의 chipCrop, 그 밖은 그 AU의 thumbCrop (자관 수정 AU의 ✂ 썸네일 크롭과 같은 값) */
+  const saveChipCrop = (auIdX: string, c: CropValue) => {
+    if (auIdX === 'base') updateRel({ chipCrop: c });
+    else updateRel({ aus: rel.aus.map(a => (a.id === auIdX ? { ...a, thumbCrop: c } : a)) });
+  };
   const saveFaceCrop = (cid: string, c: CropValue) => {
     /* AU를 보는 중이면 **그 AU에만** 저장 (v2.0 사용자 제보 — 원본에서 위치를 바꾸면 AU도
        같이 바뀌었다). 표시는 auMember가 mset 값을 우선하므로, 정하지 않은 AU는 원본을 따른다 */
@@ -883,8 +891,15 @@ export default function RelDetailPage() {
             const thumb = isBase ? (rel.thumbId ?? rel.arts?.[0]) : a.arts?.[0];
             return (
               <div key={a.id} className={`au-item ${auId === a.id ? 'on' : ''}`}
-                onClick={() => { selectAu(a.id); setArtIdx(0); setQaNo(null); }}>
-                <CroppedBlobImg fileRef={thumb} crop={isBase ? rel.thumbCrop : undefined}
+                data-tip={isAdmin && thumb ? '우클릭: 썸네일 위치 조정' : undefined}
+                onClick={() => { selectAu(a.id); setArtIdx(0); setQaNo(null); setOneMode(null); }}   /* AU를 바꾸면 그 AU의 처음 보이는 쪽으로 (cm_260929 a7a7a31) */
+                onContextMenu={e => {
+                  // 네모(1:1) 안에서 보일 위치를 따로 잡는다 (cm_260929 283eca9 — 4:3 리스트 크롭·가운데 기본값으로는 윗부분이 잘렸다)
+                  if (!isAdmin || !thumb) return;
+                  e.preventDefault();
+                  setChipEdit({ auId: a.id, ref: thumb, crop: isBase ? (rel.chipCrop ?? rel.thumbCrop) : a.thumbCrop });
+                }}>
+                <CroppedBlobImg fileRef={thumb} crop={isBase ? (rel.chipCrop ?? rel.thumbCrop) : a.thumbCrop}
                   ph={['cool', 'pale', 'red'][i % 3]}
                   /* 이미지가 없는 AU 네모는 두 사람의 테마색 그라데이션 (커플홈 사용자 요청) */
                   phStyle={phStyle(rel.members.slice(0, 2).map(m => findChar(chars, m.charId)?.color))} />
@@ -1157,6 +1172,12 @@ export default function RelDetailPage() {
           <button className={tab === 'tl' ? 'on' : ''} onClick={() => setTab('tl')}><span className="lb-pc">TIMELINE</span><span className="lb-m">T</span></button>
           {/* QUESTIONS 섹션은 ＋로 추가해야 생김 (v1.9) — 처음에는 타임라인만 */}
           {qaOn && <button className={tab === 'qa' ? 'on' : ''} onClick={() => setTab('qa')}><span className="lb-pc">QUESTIONS</span><span className="lb-m">Q</span></button>}
+          {/* QUESTIONS 탭 숨기기 (cm_260929 283eca9 — 타임라인만 보이게 되돌리기). 문답 자료는 남고 ＋로 다시 켠다 · 편집모드에서만 */}
+          {tool && qaOn && (
+            <button data-tip="QUESTIONS 탭 숨기기 — 질문·답변은 지워지지 않고 ＋로 다시 켤 수 있습니다" style={{ color: 'var(--faint)', fontSize: 12, padding: '0 6px' }}
+              onClick={() => del.ask('QUESTIONS 탭을 숨기시겠습니까?', () => { patchAuData({ qaEnabled: false }); setTab('tl'); },
+                '질문·답변 자료는 그대로 남고, 탭 옆 ＋ 로 다시 켤 수 있습니다.', '숨기기')}>✕</button>
+          )}
           {tool && !qaOn && (
             <button data-tip="QUESTIONS 섹션 추가" style={{ color: 'var(--faint)', fontSize: 14, padding: '0 6px' }}
               onClick={() => setQsetOpen(true)}>＋</button>
@@ -1742,6 +1763,12 @@ export default function RelDetailPage() {
         <FaceCropModal fileRef={faceEdit.ref} crop={faceEdit.crop}
           onClose={() => setFaceEdit(null)}
           onApply={c => saveFaceCrop(faceEdit.charId, c)} />
+      )}
+      {/* AU 네모 썸네일 위치 (v2.1 사용자 요청) — 네모 우클릭 */}
+      {chipEdit && (
+        <FaceCropModal fileRef={chipEdit.ref} crop={chipEdit.crop}
+          onClose={() => setChipEdit(null)}
+          onApply={c => { saveChipCrop(chipEdit.auId, c); setChipEdit(null); }} />
       )}
 
       {/* 삭제 확인 — DOM 마지막에 렌더해 다른 모달(AU 관리 등) 위에 뜨게 */}

@@ -20,15 +20,19 @@ import { getRawSetting, setSetting } from './settingStore';
 import { newId } from './postStore';
 
 export type SectionKind =
-  | 'gallery' | 'roadview' | 'trpg' | 'dotori' | 'playlog' | 'diary' | 'threads' | 'sched' | 'chars' | 'memo' | 'videos';
+  | 'gallery' | 'feed' | 'roadview' | 'trpg' | 'dotori' | 'playlog' | 'treview' | 'diary' | 'threads' | 'sched' | 'chars' | 'memo' | 'videos' | 'pchars';
 
 /** 섹션 종류별 기본 정보 — 설정 탭 이름과 페이지 주소 */
 export const SECTION_META: Record<SectionKind, { label: string; href: string; defName: string }> = {
   gallery:  { label: '갤러리',    href: '/gallery',   defName: '갤러리' },
+  // 큰 그림 게시판 (v2.1 사용자 요청) — 게시물이 하나씩 크게 뜨는 피드형. 글 자체는 갤러리 글과 같은 모양이지만 자기 테이블(feed)에 쌓인다
+  feed:     { label: '큰 그림',   href: '/feed',      defName: '큰 그림' },
   roadview: { label: '로드비',    href: '/loadb', defName: '로드비' },
   trpg:     { label: 'RP LOG',   href: '/log',      defName: 'RP LOG' },   // 주소는 /log (커플홈 — 종류 이름·DB 테이블은 trpg 그대로)
   dotori:   { label: '도토리',    href: '/dotori',   defName: '도토리' },
   playlog:  { label: '플레이기록', href: '/playlog', defName: '플레이기록' },
+  // TRPG 리뷰 (v2.1 사용자 요청) — 시나리오마다 별점 + 한줄 평
+  treview:  { label: 'TRPG 리뷰',  href: '/treview', defName: 'TRPG 리뷰' },
   diary:    { label: '다이어리',  href: '/diary',    defName: '다이어리' },
   threads:  { label: '감상타래',  href: '/threads',  defName: '감상타래' },
   sched:    { label: '스케줄러',  href: '/cal',      defName: '스케줄러' },
@@ -37,6 +41,8 @@ export const SECTION_META: Record<SectionKind, { label: string; href: string; de
   memo:     { label: '메모장',    href: '/memo',     defName: '메모장' },
   // Videos 게시판 (커플홈 사용자 요청) — 영상 글. 갤러리와 따로
   videos:   { label: 'Videos',   href: '/videos',   defName: 'Videos' },
+  // 상대 캐릭터 리스트 (v2.1 사용자 요청) — 내 캐릭터 말고 상대 캐릭터(own=false)만. 캐릭터는 같은 테이블
+  pchars:   { label: '상대 캐릭터', href: '/pchars',  defName: '상대 캐릭터' },
 };
 
 export const SECTION_KINDS = Object.keys(SECTION_META) as SectionKind[];

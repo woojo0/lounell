@@ -399,6 +399,8 @@ export function DecoEditor({ conf, onClose }: { conf: WidgetConf; onClose?: () =
         <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10.5 }}
           onClick={() => { setSwapFor(null); document.getElementById(inputId)?.click(); }}>＋ 이미지 추가</button>
         <KCheck label="둥근 모서리" checked={rounded} onChange={v => set({ rounded: v })} />
+        {/* 위젯 테두리 (v2.1) — 디자인 탭 「위젯 > 테두리」를 켰을 때 이 이미지에도 그릴지. 배경이 투명한 장식은 끄는 편이 낫다 */}
+        <KCheck label="위젯 테두리" checked={!conf.settings.noBorder} onChange={v => set({ noBorder: v ? undefined : true })} />
         {onClose && <button className="btn btn-ghost" style={{ marginLeft: 'auto' }} onClick={onClose}>CLOSE</button>}
       </div>
 
@@ -470,6 +472,10 @@ export function BannerEditor({ conf, onSaved, onClose }: {
   const saved = stored.length > 0 ? stored : DEMO_SLIDES;
   const [draft, setDraft] = useState<SlideDraft[]>(() => saved.map(x => ({ ...x })));
   const [interval, setIntervalSec] = useState((conf.settings.interval as number) ?? 4);
+  const [noBorder, setNoBorder] = useState(!!conf.settings.noBorder);   // 위젯 테두리 빼기 (v2.1) — 디자인 탭 위젯 테두리를 켰을 때
+  // 캡션·부제 글자색 (v2.1 사용자 요청) — 비우면 지금까지처럼 흰색·연회색
+  const [capColor, setCapColor] = useState<string>((conf.settings.capColor as string | undefined) ?? '');
+  const [subColor, setSubColor] = useState<string>((conf.settings.subColor as string | undefined) ?? '');
   const [cropFor, setCropFor] = useState<string | null>(null);   // 위치 조정 중인 슬라이드 id
   const [fileFor, setFileFor] = useState<string | null>(null);   // 파일 선택 대상 슬라이드 id
 
@@ -534,6 +540,11 @@ export function BannerEditor({ conf, onSaved, onClose }: {
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <span style={{ fontSize: 11.5, color: 'var(--sub)' }}>전환 간격</span>
           <KStep value={interval} min={2} max={30} suffix="초" onChange={setIntervalSec} />
+          <span className="cp-lb">캡션색</span>
+          <ColorField value={capColor || '#ffffff'} onChange={setCapColor} />
+          <span className="cp-lb">부제색</span>
+          <ColorField value={subColor || '#cfd3da'} onChange={setSubColor} />
+          <KCheck label="위젯 테두리" checked={!noBorder} onChange={v => setNoBorder(!v)} />
           <button className="btn btn-dark" onClick={async () => {
             const slides: BannerSlide[] = await Promise.all(
               draft.filter(d => d.cap || d.img || d.imgId || d.file).map(async d => ({
@@ -541,7 +552,7 @@ export function BannerEditor({ conf, onSaved, onClose }: {
                 imgId: d.file ? await putBlob(d.file) : d.imgId,
                 crop: d.crop,
               })));
-            updateWidget(conf.id, { settings: { ...conf.settings, slides, interval } }, { persist: true });
+            updateWidget(conf.id, { settings: { ...conf.settings, slides, interval, noBorder: noBorder || undefined, capColor: capColor || undefined, subColor: subColor || undefined } }, { persist: true });
             toast('배너가 저장되었습니다');
             onSaved?.();
           }}>SAVE</button>

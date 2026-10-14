@@ -57,9 +57,9 @@ export interface MenuSettings {
 export type ImgProtectArea = 'board' | 'comm' | 'tchar' | 'chars' | 'rels';
 
 export const IMG_PROTECT_AREAS: { key: ImgProtectArea; label: string; paths: string[] }[] = [
-  { key: 'board', label: '게시판 (갤러리·로드비 포함)', paths: ['/board', '/gallery', '/loadb'] },
+  { key: 'board', label: '게시판 (갤러리·큰 그림·로드비 포함)', paths: ['/board', '/gallery', '/feed', '/loadb'] },
   { key: 'tchar', label: 'TRPG 캐릭터', paths: ['/tchars'] },
-  { key: 'chars', label: '자캐 (캐릭터)', paths: ['/chars'] },
+  { key: 'chars', label: '자캐 (캐릭터·상대 캐릭터)', paths: ['/chars', '/pchars'] },
   { key: 'rels', label: '자관', paths: ['/rels'] },
 ];
 
@@ -351,6 +351,11 @@ export function canGalleryWrite(s: MenuSettings, secId: string, viewer: MenuView
  *  (메뉴 주소에 적힌 별명이 아니라 id로 통일 — 별명은 바뀔 수 있다) */
 export const writeKeyOf = (href: string, secId?: string) =>
   (!secId || secId === 'main' ? href : `${href}?s=${secId}`);
+
+/** 게시판마다의 기본 글쓰기 권한 — 권한 설정 화면과 각 페이지가 같은 값을 보도록 한곳에 둔다 (cm_260929 acc3537).
+ *  커플홈은 거의 다 「가입자」 (사용자 요청 — 같이 쓰는 오너도 모든 게시판에 쓴다). 캐릭터(/chars — 내 자캐) 등록만 관리자 */
+const WRITE_DEFAULT: Record<string, MenuPerm> = { '/chars': 'admin' };
+export const writeDefaultOf = (path: string): MenuPerm => WRITE_DEFAULT[path] ?? 'member';
 
 /** 게시판 글쓰기 권한 판정 (커플홈 사용자 요청 — 갤러리의 canGalleryWrite를 모든 게시판으로).
  *  관리자는 항상, 「관리자」면 관리자만, 「가입자」면 로그인한 회원 중 writeMembers[key]에 든 사람

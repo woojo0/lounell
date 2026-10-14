@@ -12,7 +12,7 @@ import { ColorField } from '@/components/ui/ColorField';
 import { DragList } from '@/components/ui/DragList';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useToast } from '@/components/ui/Toast';
-import { useMenuSettings } from '@/lib/menuStore';
+import { useMenuSettings, canWriteAt, writeKeyOf } from '@/lib/menuStore';
 import { useFonts } from '@/lib/fontStore';
 import { useSectionParam } from '@/lib/sectionStore';
 
@@ -61,7 +61,8 @@ function CalInner() {
 
   if (!loaded) return <section className="page" />;
 
-  const canWrite = isAdmin || (st.allowMember && !!user);
+  // 일정 등록 — 환경설정 「권한」의 스케줄러 행(글쓰기 멤버 선택 포함)이 있으면 그것, 없으면 달력의 「회원도 일정 등록 허용」 토글 (cm_260929 d9c7ce2)
+  const canWrite = isAdmin || canWriteAt(menuSet, writeKeyOf('/cal', sec.id), { loggedIn: !!user, isAdmin, id: user?.id }, st.allowMember ? 'member' : 'admin');
   // 고치기·지우기는 등록한 본인과 관리자 — 회원도 등록하게 되면서 (서버 규칙도 그렇게 본다)
   const canEdit = (e: SchedEvent) => canWrite && canEditEvent(e, isAdmin, user?.id);
   const canSee = (e: SchedEvent) =>

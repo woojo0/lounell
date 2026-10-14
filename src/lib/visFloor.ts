@@ -21,11 +21,13 @@ import type { ListItem } from './backend/types';
 const AREA: Record<string, { kind?: SectionKind; href?: string; board?: boolean }> = {
   posts: { board: true },              // 게시판은 섹션이 아니라 `?b=`로 갈린다
   gallery: { kind: 'gallery' },
+  feed: { kind: 'feed' },              // 큰 그림 게시판 (v2.1)
   roadview: { kind: 'roadview' },
   trpg_logs: { kind: 'trpg' },
   trpg_log_bodies: { kind: 'trpg' },   // 본문은 별도 문서 — 목록만 막으면 본문이 그대로 남는다
   dotori: { kind: 'dotori' },
   playlog: { kind: 'playlog' },
+  trpg_reviews: { kind: 'treview' },   // TRPG 리뷰 (cm_260929 6eb5c56)
   diary: { kind: 'diary' },
   threads: { kind: 'threads' },
   thread_posts: { kind: 'threads' },   // 글도 타래의 소속(secId)을 따라 메뉴 비공개 판정을 받는다

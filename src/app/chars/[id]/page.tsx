@@ -31,7 +31,9 @@ function CharDetailInner() {
   const [rels, setRels] = useLocalList<Relation>('ohome.rels.v1', REL_SEED);
   const { familyOf } = useFonts();
   // 큰 글씨 — 추가 섹션(창고캐 등)이면 그 이름, 눌렀을 때도 그 목록으로 (v2.0 사용자 제보)
-  const tt = useSectionTitle('chars', findByKey(chars, id)?.secId, 'CHARACTERS');
+  // 상대 캐릭터(own=false)는 상대 캐릭터 리스트(/pchars)의 타이틀·주소를 따른다 (v2.1 사용자 제보 — 상대 캐 페이지에 관리자 캐 리스트 제목이 떴다)
+  const found0 = findByKey(chars, id);
+  const tt = useSectionTitle(found0?.own === false ? 'pchars' : 'chars', found0?.secId, found0?.own === false ? 'PARTNER CHARACTERS' : 'CHARACTERS');
   const params = useSearchParams();
   const [tab, setTab] = useState('basic');
   const [artIdx, setArtIdx] = useState(0);
@@ -63,6 +65,8 @@ function CharDetailInner() {
   };
   // 대표 아트 우클릭 → 상세 화면에 보일 위치 조정 (v2.0)
   const [artCtx, setArtCtx] = useState<{ x: number; y: number; ref: string } | null>(null);
+  // AU 네모(원본·AU) 썸네일 위치 편집 (v2.1 사용자 제보 — 네모가 1:1이라 3:4 썸네일 크롭으로는 가로·세로가 잘렸다) — 네모 우클릭
+  const [chipEdit, setChipEdit] = useState<{ key: string | null; ref: string; crop?: CropValue } | null>(null);
   // 편집 중인 아트 참조 + 그때 실제 표시 영역의 가로/세로 비 (3:4가 아니라 화면 높이에 따라 달라진다)
   const [artCropOpen, setArtCropOpen] = useState<{ ref: string; ratio: number } | null>(null);
   const artBoxRef = useRef<HTMLDivElement>(null);
@@ -89,6 +93,15 @@ function CharDetailInner() {
       if (x.id !== id) return x;
       if (!auKey) return { ...x, artCrop: c };
       return { ...x, auProfiles: { ...x.auProfiles, [auKey]: { ...x.auProfiles?.[auKey], artCrop: c } } };
+    }));
+  };
+
+  /** AU 네모 썸네일 위치 저장 (v2.1) — 원본 네모는 캐릭터의 chipCrop, AU 네모는 그 AU 프로필의 chipCrop */
+  const saveChipCrop = (key: string | null, c: CropValue) => {
+    setChars(chars.map(x => {
+      if (x.id !== ch?.id) return x;
+      if (!key) return { ...x, chipCrop: c };
+      return { ...x, auProfiles: { ...x.auProfiles, [key]: { ...x.auProfiles?.[key], chipCrop: c } } };
     }));
   };
 
@@ -179,10 +192,17 @@ function CharDetailInner() {
       {/* AU 프로필 리스트 (v1.9) — 자관에 추가된 AU가 있으면 우상단, 각 AU의 저장 썸네일 기준 */}
       {charAus.length > 0 && (
         <div className="au-list" style={{ justifyContent: 'flex-end', marginBottom: 10 }}>
-          {/* 이미지가 없을 때의 네모 색은 캐릭터 테마색 (커플홈 사용자 요청) */}
+          {/* 이미지가 없을 때의 네모 색은 캐릭터 테마색 (커플홈 사용자 요청) · 우클릭: 썸네일 위치 조정 (cm_260929 283eca9) */}
           <div className={`au-item ${auKey === null ? 'on' : ''} ph ${ch.thumbClass}`} style={{ ...phStyle([ch.color]), borderColor: auKey === null ? 'var(--accent)' : 'var(--line)' }}
-            onClick={() => selectAu(null)}>
-            {(ch.thumbId || ch.arts?.[0]) && <CroppedBlobImg fileRef={ch.thumbId ?? ch.arts?.[0]} crop={ch.thumbCrop} ph={ch.thumbClass} />}
+            data-tip={(isAdmin || charGrant(ch, user?.id) === 'edit') ? '원본 · 우클릭: 썸네일 위치 조정' : '원본'}
+            onClick={() => selectAu(null)}
+            onContextMenu={e => {
+              const ref = ch.thumbId ?? ch.arts?.[0];
+              if (!ref || !(isAdmin || charGrant(ch, user?.id) === 'edit')) return;
+              e.preventDefault();
+              setChipEdit({ key: null, ref, crop: ch.chipCrop ?? ch.thumbCrop });
+            }}>
+            {(ch.thumbId || ch.arts?.[0]) && <CroppedBlobImg fileRef={ch.thumbId ?? ch.arts?.[0]} crop={ch.chipCrop ?? ch.thumbCrop} ph={ch.thumbClass} />}
             <small>원본</small>
           </div>
           {charAus.map(a => {
@@ -194,9 +214,14 @@ function CharDetailInner() {
             return (
               <div key={a.key} className={`au-item ${auKey === a.key ? 'on' : ''} ph ${ch.thumbClass}`}
                 style={{ ...phStyle([p?.color ?? ch.color]), borderColor: auKey === a.key ? 'var(--accent)' : 'var(--line)' }}
-                data-tip={`${a.relName} · ${a.label}`}
-                onClick={() => selectAu(a.key)}>
-                {ref && <CroppedBlobImg fileRef={ref} crop={p?.thumbCrop} ph={ch.thumbClass} />}
+                data-tip={`${a.relName} · ${a.label}${ref && (isAdmin || charGrant(ch, user?.id) === 'edit') ? ' · 우클릭: 썸네일 위치 조정' : ''}`}
+                onClick={() => selectAu(a.key)}
+                onContextMenu={e => {
+                  if (!ref || !(isAdmin || charGrant(ch, user?.id) === 'edit')) return;
+                  e.preventDefault();
+                  setChipEdit({ key: a.key, ref, crop: p?.chipCrop ?? p?.thumbCrop });
+                }}>
+                {ref && <CroppedBlobImg fileRef={ref} crop={p?.chipCrop ?? p?.thumbCrop} ph={ch.thumbClass} />}
                 <small>{a.label}</small>
               </div>
             );
@@ -351,6 +376,12 @@ function CharDetailInner() {
           ? <Lightbox srcs={srcs} index={Math.min(artIdx, srcs.length - 1)} onClose={() => setLbOpen(false)} />
           : null;
       })()}
+      {/* AU 네모(원본·AU) 썸네일 위치 (v2.1) — 네모 우클릭 */}
+      {chipEdit && (
+        <ArtCropModal fileRef={chipEdit.ref} ratio={1} label="AU 네모 (1:1)" crop={chipEdit.crop}
+          onClose={() => setChipEdit(null)}
+          onApply={c => { saveChipCrop(chipEdit.key, c); setChipEdit(null); }} />
+      )}
       {artCropOpen && (
         <ArtCropModal fileRef={artCropOpen.ref} ratio={artCropOpen.ratio} crop={eff?.artCrop}
           onClose={() => setArtCropOpen(null)}
@@ -362,13 +393,13 @@ function CharDetailInner() {
 
 /** 상세 아트 위치 편집기 (v2.0) — 실제 표시 영역의 비율 그대로 열어야 보이는 대로 맞출 수 있다.
  *  이 영역은 화면 높이에 따라 달라지므로 고정 비율(3:4 등)을 쓰면 편집기와 결과가 어긋난다. */
-function ArtCropModal({ fileRef, ratio, crop, onClose, onApply }: {
-  fileRef: string; ratio: number; crop?: CropValue; onClose: () => void; onApply: (c: CropValue) => void;
+function ArtCropModal({ fileRef, ratio, crop, label, onClose, onApply }: {
+  fileRef: string; ratio: number; crop?: CropValue; label?: string; onClose: () => void; onApply: (c: CropValue) => void;
 }) {
   const url = useBlobUrl(fileRef);
   if (!url) return null;
   return (
-    <CropEditor open src={url} aspect={ratio} aspectLabel="상세 화면과 같은 비율"
+    <CropEditor open src={url} aspect={ratio} aspectLabel={label ?? '상세 화면과 같은 비율'}
       initial={crop} onClose={onClose} onApply={onApply} />
   );
 }

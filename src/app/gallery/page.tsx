@@ -15,7 +15,7 @@ import { EditableDesc, PageTitle } from '@/components/ui/PageText';
 import { useMainStore } from '@/lib/mainStore';
 import { useCardSort, mergeOrder } from '@/lib/cardSort';
 import { useMenuSettings, canGalleryWrite } from '@/lib/menuStore';
-import { useBoardSettings, galleryCatsOf } from '@/lib/boardStore';
+import { useBoardSettings, galleryCatsOf, perPageOf } from '@/lib/boardStore';
 
 const FOLD_LABEL = { spoiler: '스포일러', adult: '수위 주의' };
 
@@ -53,7 +53,7 @@ function BackupPageInner() {
     return () => document.removeEventListener('mousedown', close);
   }, [ctx]);
   const onCtx = (e: React.MouseEvent, p: BackupPost) => {
-    if (!(isAdmin || (!!user && p.authorId === user.id)) || !p.images[0]) return;
+    if (!(isAdmin || (!!user && p.authorId === user.id)) || !(p.thumbId ?? p.images[0])) return;
     e.preventDefault();
     e.stopPropagation();
     setCtx({ x: e.clientX, y: e.clientY, post: p });
@@ -68,8 +68,9 @@ function BackupPageInner() {
   // 편집모드 카드 드래그 정렬 (v1.9 — 갤러리 보기)
   const sort = useCardSort(visible, next => setPosts(mergeOrder(posts, next)), editOn && isAdmin);
 
-  /* 게시물이 쌓이면 페이지로 (v2.0 사용자 요청) — 갤러리·리스트 보기 모두 한 장에 6개 (커플홈 사용자 확정) */
-  const PER = 6;
+  /* 게시물이 쌓이면 페이지로 (v2.0 사용자 요청) — 한 장 분량은 환경설정 > 게시판 관리에서 (cm_260929 197e1d5).
+     기본은 갤러리·리스트 보기 모두 6개 (커플홈 사용자 확정) — PER_PAGE_DEFAULT */
+  const PER = perPageOf(boardSet, view === 'gal' ? 'gallery' : 'galleryList');
   const [page, setPage] = useState(1);
   const pages = Math.max(1, Math.ceil(visible.length / PER));
   const cur = Math.min(page, pages);      // 검색·보기 전환으로 줄면 마지막 장으로 당긴다
@@ -121,7 +122,7 @@ function BackupPageInner() {
                 onContextMenu={e => onCtx(e, p)}>
                 <div className={`thumb ${folded ? 'veil' : ''}`}>
                   <div style={{ position: 'absolute', inset: 0 }}>
-                    <CroppedBlobImg fileRef={p.images[0]} crop={p.thumbCrop} ph={p.phList[0] ?? 'cool'} />
+                    <CroppedBlobImg fileRef={p.thumbId ?? p.images[0]} crop={p.thumbCrop} ph={p.phList[0] ?? 'cool'} />
                   </div>
                   {/* 유형 뱃지(로그/단일 …)는 리스트에서 뺐다 (v2.0 사용자 요청) — 상세에는 그대로 */}
                   {folded && (
@@ -150,7 +151,7 @@ function BackupPageInner() {
           {paged.map(p => (
             <div key={p.id} className="list-item" onClick={() => router.push(`/gallery/${p.id}`)}
               onContextMenu={e => onCtx(e, p)}>
-              <div className="th" style={{ position: 'relative' }}><CroppedBlobImg fileRef={p.images[0]} crop={p.thumbCrop} ph={p.phList[0] ?? 'cool'} /></div>
+              <div className="th" style={{ position: 'relative' }}><CroppedBlobImg fileRef={p.thumbId ?? p.images[0]} crop={p.thumbCrop} ph={p.phList[0] ?? 'cool'} /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <b>
                   {p.title}
@@ -208,7 +209,7 @@ function BackupPageInner() {
 function ThumbCropModal({ post, onClose, onApply }: {
   post: BackupPost; onClose: () => void; onApply: (c: CropValue) => void;
 }) {
-  const url = useBlobUrl(post.images[0]);
+  const url = useBlobUrl(post.thumbId ?? post.images[0]);   // 썸네일 전용 이미지가 있으면 그것을 자른다 (v2.1)
   if (!url) return null;
   return <CropEditor open src={url} aspect="4:3" initial={post.thumbCrop} onClose={onClose} onApply={onApply} />;
 }

@@ -43,6 +43,8 @@ export interface Character {
   thumbClass: string;    // 데모 플레이스홀더 클래스
   thumbId?: string;      // 리스트 썸네일 (IndexedDB, 3:4 크롭)
   thumbCrop?: import("@/components/ui/CropEditor").CropValue;
+  /** 캐릭터 페이지 「원본」 AU 네모(1:1) 위치 (v2.1) — 리스트 썸네일(3:4)과 따로. 네모 우클릭 */
+  chipCrop?: import("@/components/ui/CropEditor").CropValue;
   /** 상세 페이지 중앙 아트의 위치 (v2.0) — 리스트 썸네일과 보이는 크기·비율이 달라
    *  같은 크롭을 쓰면 원하는 부분이 안 나온다. 따로 잡으면 상세에서는 이 값을 쓴다. */
   artCrop?: import("@/components/ui/CropEditor").CropValue;
@@ -84,6 +86,7 @@ export interface AuCharProfile {
   thumbId?: string;
   thumbCrop?: import("@/components/ui/CropEditor").CropValue;
   artCrop?: import("@/components/ui/CropEditor").CropValue;   // 상세 중앙 아트 위치 (v2.0)
+  chipCrop?: import("@/components/ui/CropEditor").CropValue;  // 캐릭터 페이지 AU 네모(1:1) 위치 (v2.1) — 네모 우클릭
   fontId?: string;
   nameSize?: number;     // 상세 큰 이름 크기 px (v2.0)
   nameBold?: boolean;    // 상세 큰 이름 굵게 (v2.0 사용자 요청 — 폰트에 따라 볼드가 안 어울린다)
@@ -394,6 +397,8 @@ export interface RelAu {
   titleBold?: boolean;
   /** AU별 전신 앞뒤 (v2.0) — AU 편집의 앞으로/뒤로가 원본 배치를 바꾸지 않게. 미지정: 자관 기본 */
   fullFront?: string;
+  /** 처음 보이는 이미지 — 전신(duo) / 일러스트(one) (v2.1 사용자 요청) — 비우면 자관 기본(Relation.illustMode) */
+  illustMode?: 'duo' | 'one';
   /** AU별 색·배경 — 없으면 자관 기본 (위 RelAuStyle 설명 참조) */
   style?: RelAuStyle;
   /** AU별 멤버 표시값 — 없으면 자관 기본 (위 RelAuMember 설명 참조) */
@@ -402,6 +407,8 @@ export interface RelAu {
   cp?: RelCpTag;          // 없으면 자관 기본(Relation.cp)
   cpText?: string;        // AU별 CP 뱃지 문구 (커플홈) — 없으면 자관 기본, 그것도 없으면 CP/NCP
   arts?: string[];        // AU별 중앙/그룹 일러 (base는 Relation.arts)
+  /** AU 네모(1:1) 썸네일 위치 (v2.1 사용자 요청 — AU 일러 윗부분이 잘렸다) — 자관 수정(AU)의 ✂ 썸네일 크롭 · 자관 페이지 AU 네모 우클릭 */
+  thumbCrop?: import("@/components/ui/CropEditor").CropValue;
   timeline?: TlItem[];    // base는 Relation.timeline
   questions?: QaEntry[];  // base는 Relation.questions
   qaPool?: string[];      // 대기 질문 풀 (v1.9 — 리스트에서 담은 미출제 질문, 랜덤 출제 대기)
@@ -458,6 +465,8 @@ export interface Relation {
   pageBgAngle?: number;
   thumbId?: string;              // 리스트 썸네일 (IndexedDB, 4:3 크롭)
   thumbCrop?: import("@/components/ui/CropEditor").CropValue;
+  /** 자관 페이지 「원본」 네모(1:1) 위치 (v2.1) — 리스트 썸네일(4:3)과 따로. 네모 우클릭 「썸네일 위치 조정」 */
+  chipCrop?: import("@/components/ui/CropEditor").CropValue;
   members: RelMember[];          // 2인 = 좌/우, 3인+ = 다인 리스트
   visibility: Visibility;
   thumbClass: string;

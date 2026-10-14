@@ -220,6 +220,27 @@ a{color:inherit;text-decoration:none}
 .bgm.bgm-dock.folded .ctrl{display:flex}
 .bgm.bgm-dock .ctrl button{width:24px;height:24px}
 .bgm.bgm-dock .bgm-list,.bgm.bgm-dock.bgm-left .bgm-list{right:12px;left:auto}
+/* 모바일 메뉴 버튼 (v2.1 사용자 요청) — 오른쪽 아래 「≡」. BGM 바가 있으면 바 높이(--bgm-h) 가운데에, 없으면 바닥에서 조금 띄워 */
+.mmenu{display:none}
+@media (max-width:620px){
+  .mmenu{display:block}
+  /* 버튼은 BGM 바의 오른쪽 칸 — 바와 같은 높이(36px)·배경, 왼쪽에 칸 선만 (v2.1 사용자 요청: 따로 떠 있는 버튼이 아니라 한 줄로).
+     BGM 바가 없으면 바닥 오른쪽 끝에 같은 모양의 작은 칸으로 남는다 */
+  .mmenu-btn{position:fixed;right:0;bottom:0;z-index:72;width:40px;height:max(var(--bgm-h,0px),36px);border-radius:0;
+    display:grid;place-items:center;font-size:20px;line-height:1;color:var(--bgm-fg,var(--ink));background:var(--bgm-bg,var(--panel-solid));
+    border:1px solid var(--line-dark);border-right:0;border-bottom:0;backdrop-filter:blur(10px)}
+  .mmenu-ov{position:fixed;inset:0;z-index:71;background:rgba(0,0,0,.18)}
+  .mmenu-pop{position:fixed;right:8px;bottom:calc(max(var(--bgm-h,0px),36px) + 8px);z-index:72;width:min(260px,calc(100vw - 16px));max-height:70vh;overflow:auto;
+    background:var(--dd-bg);border:1px solid var(--line-dark);border-radius:12px;box-shadow:var(--sh-dd);padding:6px}   /* 하위메뉴 드롭다운과 같은 색 (커플홈 — 같은 모양의 메뉴는 같은 색) */
+  .mmenu-pop button{display:flex;align-items:center;justify-content:space-between;width:100%;text-align:left;padding:10px 12px;border-radius:8px;
+    font-size:calc(13px*var(--fs,1));color:var(--dd-fg);background:transparent;border:0;font-family:var(--font-dropdown,var(--sans))}
+  .mmenu-pop button.top{font-weight:600;letter-spacing:.04em}
+  .mmenu-pop button:hover,.mmenu-pop button:active{background:var(--dd-hv)}   /* 드롭다운 호버색 (커플홈 사용자 요청 — 모바일 메뉴 호버도) */
+  .mmenu-pop .ar{color:color-mix(in srgb,var(--dd-fg) 55%,transparent);font-size:11px}
+  .mmenu-pop .sub{padding:0 0 4px 10px}
+  .mmenu-pop .sub button{font-weight:400;padding:8px 12px;color:color-mix(in srgb,var(--dd-fg) 82%,transparent)}
+  .mmenu-pop .g.open > .top{color:var(--accent)}
+}
 .bgm-list.on{display:block;animation:fade .18s}
 .bgm-list .h{font-size:calc(9px*var(--fs,1));letter-spacing:.22em;color:var(--bgm-ic);padding:4px 9px 7px}
 /* 곡 목록은 8개까지만 보이고 넘치면 스크롤 (커플홈 사용자 요청) — 한 줄 높이(제목+설명)의 8배 */
@@ -408,8 +429,10 @@ a{color:inherit;text-decoration:none}
 /* 어두운 버튼(35px 고정)과 나란히 서는 자리 — 페이지 머리줄·역극 방 머리·모달 하단 — 에서는 테두리 버튼도 같은 높이로
    (커플홈 사용자 제보: "편집모드 버튼 세로가 다른 버튼들보다 작아 보여"). 패딩을 따로 준 작은 인라인 테두리 버튼은 그대로 */
 .head-actions .btn-ghost,.modal-actions .btn-ghost{height:35px;padding-top:0;padding-bottom:0;box-sizing:border-box}   /* 역극 방 머리(.rp-head)는 일부러 작게 만든 버튼들이라 뺀다 (사용자 제보: 갑자기 커졌다) */
-.btn-accent{background:var(--accent);color:#fff}
-.btn-accent:hover{background:var(--accent-soft)}
+/* 작성 완료·저장·삭제 버튼(POST/SAVE/DELETE) — 진한 버튼과 같은 3색 (v2.1 사용자 요청: 「호버 색만 다르고 적용한 적 없는 색」.
+   디자인 탭 「진한 버튼」이 등록·저장 버튼 공통이라고 안내하므로 호버까지 그대로 따른다 — 예전엔 포인트색 + 파생 연한색이었다) */
+.btn-accent{background:var(--btn-dark,var(--accent));color:var(--btn-dark-fg,#fff)}
+.btn-accent:hover{background:var(--btn-dark-hv,var(--accent-soft))}
 /* 어두운 페이지 배경 위의 저강조 버튼 (CANCEL 등 — 주버튼보다 약하게) */
 /* 배경 위 보조 버튼 — 중립 회색 베이스 + 테마 글씨색이라 라이트/다크 모두 보임 */
 .btn-onbk{background:rgba(127,127,127,.13);border:1px solid rgba(127,127,127,.28);color:var(--page-desc)}
@@ -775,13 +798,12 @@ a{color:inherit;text-decoration:none}
 .icobtn:hover{background:#e9ebee;color:var(--ink)}
 .icobtn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 /* 우측 작품 리스트 */
-.thr-item{display:flex;gap:11px;padding:10px 12px;border-radius:10px;cursor:var(--cur-pointer,pointer);transition:.13s;align-items:center}
+.thr-item{display:flex;gap:11px;padding:10px 12px;border-radius:10px;cursor:var(--cur-pointer,pointer);transition:.13s;align-items:center;border:1.5px solid transparent}
 .thr-item:hover{background:#f0f1f4}
-.thr-item.on{background:var(--btn-dark,var(--ink));color:var(--btn-dark-fg,#fff)}
+.thr-item.on{border-color:var(--btn-dark,var(--ink))} /* 선택 중인 타래 — 테두리만 (v2.1 사용자 요청: 칸 전체를 칠하니 너무 세다) */
 .thr-item .th{width:38px;aspect-ratio:3/4;border-radius:6px;flex-shrink:0;overflow:hidden;position:relative}
 .thr-item b{font-size:calc(12.5px*var(--fs,1));display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} /* 긴 제목 말줄임 (v1.9) */
 .thr-item small{font-size:calc(10px*var(--fs,1));color:var(--faint);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.thr-item.on small{color:var(--btn-dark-fg,#aab0ba);opacity:.65}
 /* 리스트 보기 카드 (한 줄 5개, 3:4 포스터) */
 .thr-card{padding:0;overflow:hidden;cursor:var(--cur-pointer,pointer);transition:.15s}
 .thr-card:hover{transform:translateY(-3px)}
@@ -843,6 +865,10 @@ a{color:inherit;text-decoration:none}
 .re-btn{min-width:28px;height:28px;padding:0 7px;border-radius:6px;font-size:calc(13px*var(--fs,1));color:var(--sub);display:grid;place-items:center;transition:.13s}
 .re-btn:hover{background:#eef0f2;color:var(--ink)}
 .re-btn.on{background:var(--ink);color:#fff}
+/* 링크 입력줄 · HTML 코드 칸 (v2.1) */
+.re-linkrow{display:flex;gap:6px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line);background:#fafbfc}
+.re-linkrow .k-input{flex:1;height:30px;font-size:calc(12px*var(--fs,1))}
+.re-src{display:block;width:100%;min-height:220px;padding:12px 14px;border:0;outline:none;resize:vertical;background:#fff;color:var(--ink);font-family:ui-monospace,Consolas,monospace;font-size:calc(12px*var(--fs,1));line-height:1.6;white-space:pre-wrap}
 .re-sep{width:1px;height:16px;background:var(--line);margin:0 5px}
 .re-content{min-height:260px;padding:14px 16px;outline:none;font-size:calc(14.5px*var(--fs,1));line-height:1.85}
 /* TipTap이 .prose를 함께 붙임 — .prose(뒤 정의)가 이기지 않도록 상위 셀렉터로 고정 */
@@ -1006,7 +1032,7 @@ body.edit-on .main-grid{grid-template-columns:230px 1fr 260px}
 .menu-list .msub{display:none;padding-left:12px}
 .menu-list .mgrp.open .msub{display:block}
 .menu-list .msub a{font-size:calc(12px*var(--fs,1));color:var(--sub);padding:7px 12px}
-.banner{position:relative;height:210px;border-radius:var(--radius);overflow:hidden;box-shadow:var(--sh-md)}
+.banner{position:relative;height:210px;border-radius:var(--radius);overflow:hidden;box-shadow:var(--sh-md);border:var(--wg-bd-w) solid var(--wg-bd)} /* 위젯 테두리도 (v2.1) */
 .banner .cap{position:absolute;left:22px;bottom:18px;color:#fff;z-index:3}
 .banner .cap b{--fs:var(--fs-title,1);font-family:var(--serif);font-size:calc(22px*var(--fs,1));font-weight:var(--fw-title,700);letter-spacing:.2em;display:block}
 .banner .cap span{--fs:var(--fs-subtitle,1);font-family:var(--font-subtitle,var(--sans));font-weight:var(--fw-subtitle,400);font-size:calc(11px*var(--fs,1));color:#cfd3da}
@@ -1015,8 +1041,13 @@ body.edit-on .main-grid{grid-template-columns:230px 1fr 260px}
 .banner .dots i.on{background:#fff;width:16px;border-radius:4px}
 .banner .slide{position:absolute;inset:0;opacity:0;transition:opacity .5s}
 .banner .slide.on{opacity:1}
-.login-box{padding:18px}
-.login-box h3{font-size:calc(13px*var(--fs,1));letter-spacing:.08em;margin-bottom:12px;color:var(--sub)}
+/* 슬라이드 배너·장식 이미지도 위젯 테두리(디자인 탭 「위젯 > 테두리」)를 그린다 (v2.1 사용자 요청) —
+   위젯 설정의 「위젯 테두리」 체크를 끄면 그 위젯만 뺀다 (배경이 투명한 장식 이미지 등) */
+.deco-wgt{border:var(--wg-bd-w) solid var(--wg-bd)}
+.banner.no-bd,.deco-wgt.no-bd{border:none}
+/* 회원정보창도 위젯 스타일(배경·글씨·타이틀·테두리 — 디자인 탭 「위젯」)을 따른다 (v2.1 사용자 요청: 글자색·테두리가 적용되지 않았다) */
+.login-box{padding:18px;background:var(--wg-bg);color:var(--wg-fg);border:var(--wg-bd-w) solid var(--wg-bd)}
+.login-box h3{font-size:calc(13px*var(--fs,1));letter-spacing:.08em;margin-bottom:12px;color:var(--wg-title)}
 /* 위젯 스타일 (v2.0 사용자 요청) — 배경·타이틀색·본문색·테두리를 디자인 탭에서 따로 정한다.
    안 정하면 --wg-* 가 카드 색을 그대로 가리키므로 지금까지와 똑같이 보인다.
    테두리는 --wg-bd-w 가 0px이라 켜기 전에는 그려지지 않는다(그림자만). */
@@ -1485,6 +1516,20 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 @media (max-width:620px){.dy-thumb{width:76px}}
 .dy-row .dy-body .post-body{font-size:calc(14px*var(--fs,1));line-height:1.85}
 
+/* ---------- 큰 그림 게시판 (v2.1 사용자 요청) — 한 줄에 글 하나, 큰 이미지 + 말머리·제목·날짜 ---------- */
+.feed-list{display:grid;gap:18px;max-width:672px;margin:0 auto} /* 960의 70% — 패널째 줄인다 (v2.1 사용자 요청: 흰 배경도 이미지에 딱 맞게) */
+.feed-item{padding:0;overflow:hidden;cursor:var(--cur-pointer,pointer);transition:.15s}
+.feed-item:hover{transform:translateY(-2px)}
+.feed-item .art{position:relative;background:var(--panel-solid);min-height:120px;overflow:hidden}
+.feed-item .art img{display:block;max-width:100%;height:auto;margin:0 auto} /* 패널(70% 폭)을 꽉 채운다 (v2.1 사용자 요청) */
+.feed-item .art.veil img{filter:blur(18px)}
+.feed-item .art .cover{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;background:rgba(127,127,127,.15)}
+.feed-item .art .cover b{display:block;font-size:calc(13px*var(--fs,1))}
+.feed-item .art .cover span{display:block;font-size:calc(10.5px*var(--fs,1));color:var(--faint);margin-top:4px}
+.feed-item .cap{display:flex;align-items:center;gap:10px;padding:12px 16px;flex-wrap:wrap;border-top:1px solid var(--line)}
+.feed-item .cap b{font-size:calc(14px*var(--fs,1));min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feed-item .cap small{margin-left:auto;font-size:calc(10.5px*var(--fs,1));color:var(--faint);white-space:nowrap}
+
 /* ---------- 커미션 (4.18) ---------- */
 .cm-total-slot{display:inline-flex;align-items:center;padding:7px 15px;border-radius:999px;background:var(--panel);box-shadow:var(--sh-sm);font-size:calc(11.5px*var(--fs,1));font-weight:700;letter-spacing:.14em;color:var(--sub);cursor:default}
 .cm-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
@@ -1777,6 +1822,38 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
 .tagin-list button{text-align:left;border:0;background:transparent;padding:7px 10px;border-radius:6px;font-size:calc(12.5px*var(--fs,1));color:var(--ink);cursor:var(--cur-pointer,pointer)}
 .tagin-list button:hover,.tagin-list button.on{background:color-mix(in srgb,var(--accent) 9%,#fff);color:var(--accent)}
 
+/* ---------- TRPG 리뷰 (v2.1 사용자 요청) — 별점 + 한줄 평 목록 ---------- */
+/* 3:4 타일 그리드 (v2.1 사용자 요청 — 캐릭터 게시판처럼 타일이 쭉) */
+.rv-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+@media(max-width:1080px){.rv-grid{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:620px){.rv-grid{grid-template-columns:repeat(2,1fr);gap:10px}}
+.rv-card{cursor:var(--cur-pointer,pointer)}
+.rv-card .rv-img{aspect-ratio:3/4;position:relative;overflow:hidden}
+.rv-card .rv-img .ph{position:absolute;inset:0}
+.rv-card .rv-badge{position:absolute;left:8px;top:8px;z-index:2}
+.rv-card .bd .rv-stars{justify-content:flex-start;gap:6px 10px;margin-top:6px}
+.rv-detail-panel{display:grid;grid-template-columns:1fr;gap:18px;align-items:start}
+.rv-detail-panel:has(.rv-detail-img){grid-template-columns:280px 1fr}
+.rv-detail-img{position:relative;aspect-ratio:3/4;border-radius:var(--radius-s);overflow:hidden}
+.rv-detail-img .ph{position:absolute;inset:0}
+@media(max-width:720px){.rv-detail-panel:has(.rv-detail-img){grid-template-columns:1fr}.rv-detail-img{max-width:280px}}
+.rv-list{display:grid;gap:10px}
+.rv-row{padding:14px 18px;cursor:var(--cur-pointer,pointer);transition:.15s;display:grid;grid-template-columns:1fr auto;gap:6px 14px;align-items:center}
+.rv-row:hover{transform:translateY(-2px)}
+.rv-row .hd{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}
+.rv-row .hd b{font-size:calc(14.5px*var(--fs,1));min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-row .meta{font-size:calc(11px*var(--fs,1));color:var(--sub)}
+.rv-row .ex{grid-column:1/-1;font-size:calc(12.5px*var(--fs,1));color:var(--sub);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rv-stars{display:flex;gap:12px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+.rv-stars .s{display:inline-flex;align-items:center;gap:5px;font-size:calc(11px*var(--fs,1));color:var(--sub);white-space:nowrap}
+.rv-stars .s i{font-style:normal;color:#e0a92f;letter-spacing:.06em;font-size:calc(13.5px*var(--fs,1))}
+.rv-pick{display:inline-flex;gap:2px}
+.rv-pick button{font-size:22px;line-height:1;color:#d7dae0;padding:0 1px;background:transparent;border:0;cursor:var(--cur-pointer,pointer);transition:.12s}
+.rv-pick button.on{color:#e0a92f}
+.rv-pick button:disabled{cursor:default}
+.rv-detail .rv-stars{justify-content:flex-start;margin:10px 0 16px}
+@media (max-width:620px){.rv-row{grid-template-columns:1fr}.rv-stars{justify-content:flex-start}}
+
 /* ---------- 게시판 공통 (4.2) ---------- */
 .toolrow{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;gap:10px;flex-wrap:wrap}
 /* 줄바꿈으로 검색·버튼 묶음이 아랫줄로 내려가도 오른쪽 정렬 유지 (v1.9 사용자 요청) */
@@ -2029,8 +2106,12 @@ body.edit-on .main-grid.gridlines .wgt{outline-offset:0}
   .bgm.folded .ctrl{display:flex}
   /* 모바일 BGM은 더 납작하게 — 레코드판(디스크) 없이 제목+컨트롤 한 줄 (v1.9 사용자 요청) */
   .bgm .disc,.bgm.folded .disc{display:none}
-  .bgm,.bgm.bgm-left,.bgm.folded{padding:4px 12px}
+  /* 오른쪽 끝은 메뉴 버튼(.mmenu-btn) 자리 — BGM 컨트롤을 그만큼 왼쪽으로. 버튼은 바의 오른쪽 칸처럼 같은 높이·배경으로 붙는다
+     (v2.1 사용자 요청: "여백이 많으니 메뉴 버튼이랑 연결된 UI처럼 한 줄로") — 바 높이를 36px로 맞춰 버튼과 같은 줄이 된다 */
+  .bgm,.bgm.bgm-left,.bgm.folded{padding:4px 42px 4px 12px;min-height:36px;box-sizing:border-box}
   .bgm .ctrl button{width:24px;height:24px}
+  /* 역극 — BGM 바가 없어도 오른쪽 아래 메뉴 칸(.mmenu-btn, 36px)이 입력줄의 ↑ 버튼을 가리지 않게 (BGM 바가 있으면 그 높이) */
+  .page.page-rp{padding-bottom:calc(14px + max(var(--bgm-h,0px),36px))}
 
   /* 캐릭터 리스트 — 모바일 1열 3개 (v1.9 사용자 확정) */
   .chars-grid{grid-template-columns:repeat(3,1fr);gap:10px}

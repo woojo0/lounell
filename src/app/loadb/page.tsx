@@ -8,7 +8,8 @@ import {
   CommentRow, COMMENT_KEY, COMMENT_SEED, commentsFor,
 } from '@/lib/postStore';
 import { RoadItem, ROAD_SEED } from '@/lib/galleryStore';
-import { SearchBar, KInput } from '@/components/ui/Kit';
+import { useBoardSettings, roadCatsOf, boardBadgeStyle, BoardBadge, perPageOf } from '@/lib/boardStore';
+import { SearchBar, KInput, KSelect, Pager } from '@/components/ui/Kit';
 import { putBlob, useBlobUrl } from '@/lib/blobStore';
 import { Modal, ConfirmModal, useConfirmDelete } from '@/components/ui/Modal';
 import { EditableDesc, PageTitle } from '@/components/ui/PageText';
@@ -19,11 +20,11 @@ import { useMenuSettings, MenuPerm, canWriteAt, writeKeyOf } from '@/lib/menuSto
 import { GuestIdBar } from '@/components/ui/GuestId';
 import { fileDrop } from '@/lib/dnd';
 
-const PAGE_SIZE = 4;
 const FOLD_LABEL = { spoiler: '스포일러', adult: '수위 주의' };
 
-function RoadBlock({ item, comments, onComment, onEditComment, onDeleteComment, canComment, guestMode, editLevel, delLevel, canEditItem, canDeleteItem, onEdit, onDelete }: {
+function RoadBlock({ item, catBadge, comments, onComment, onEditComment, onDeleteComment, canComment, guestMode, editLevel, delLevel, canEditItem, canDeleteItem, onEdit, onDelete }: {
   item: RoadItem;
+  catBadge?: BoardBadge;                                // 말머리 뱃지 색 (v2.1) — 등록된 말머리면 그 색, 아니면 중립색
   comments: Comment[];                                  // 이 그림의 댓글 — 분리 저장분 + 옛 항목 안의 것 (v2.0)
   onComment: (id: string, text: string, guest?: { name: string }, parentId?: string) => void;
   onEditComment: (id: string, cid: string, text: string) => void;
@@ -73,6 +74,8 @@ function RoadBlock({ item, comments, onComment, onEditComment, onDeleteComment, 
       {/* 그림별 상단 번호 영역 (v1.9 사용자 확정) — 숫자만 표시 (제목·작성자 없이) */}
       <div className="rv-head">
         <b>No.{String(item.no ?? 0).padStart(3, '0')}</b>
+        {/* 말머리 (v2.1 사용자 요청) — 번호 옆에 뱃지로 */}
+        {item.category && <span style={{ ...boardBadgeStyle(catBadge), marginLeft: 8 }}>{item.category}</span>}
       </div>
       {/* 투명 PNG도 카드색 위에 자연스럽게 — 어두운 하드코딩 제거 (v1.9 사용자 피드백) */}
       <div className={`art ${folded ? 'veil' : ''}`} style={{ background: 'var(--panel-solid)' }}>
@@ -183,7 +186,18 @@ function RoadviewPageInner() {
   // 일반 회원이 남의 그림에 댓글을 달 수 없었다 (게시판과 같은 원인)
   const [cmtRows, setCmtRows] = useLocalList<CommentRow>(COMMENT_KEY, COMMENT_SEED);
   const [q, setQ] = useState('');
-  const [shown, setShown] = useState(PAGE_SIZE);
+  const [page, setPage] = useState(1);   // 번호 페이지 (v2.1 사용자 요청 — 「더보기」 대신 1·2·3페이지)
+  /* 말머리 (v2.1 사용자 요청 — 말머리별로 모아보기). 환경설정 > 게시판 관리의 로드비 말머리.
+     하나도 없으면 탭·선택 줄 없이 지금까지처럼 */
+  const { st: boardSet } = useBoardSettings();
+  const cats = roadCatsOf(boardSet, sec.id);
+  const [cat, setCat] = useState('');                 // 보는 탭 — '' = ALL
+  const [upCat, setUpCat] = useState('');             // 올릴 때 붙일 말머리
+  const [upOpen, setUpOpen] = useState(false);         // 업로드 모달 (v2.1 사용자 요청 — 머리줄의 말머리 드롭다운이 탭과 겹쳐 보여, 올릴 때 모달에서 고른다)
+  const effUpCat = cats.some(c => c.label === upCat) ? upCat : '';   // 업로드 모달에서 고른 말머리 (없음이면 말머리 없이)
+  const PER = perPageOf(boardSet, 'road');   // 한 페이지 그림 수 — 환경설정 > 게시판 관리 (기본 4, v2.1)
+  useEffect(() => { setPage(1); }, [cat, q]);   // 탭·검색을 바꾸면 첫 장부터
+  const badgeOf = (label?: string) => cats.find(c => c.label === label);
 
   // 그림 번호 (v1.9) — 번호 없는 기존 그림은 오래된 순으로 자동 부여
   useEffect(() => {
@@ -203,10 +217,11 @@ function RoadviewPageInner() {
   const [editFor, setEditFor] = useState<RoadItem | null>(null);
   const [eNo, setENo] = useState('');      // 번호 수정 (v1.9 — 제목 없이 번호만 쓰는 체계)
   const [eAdult, setEAdult] = useState(false);
+  const [eCat, setECat] = useState('');    // 말머리 수정 (v2.1)
   const [delFor, setDelFor] = useState<RoadItem | null>(null);
 
   // 즉시 업로드 (v1.7) — IndexedDB 실저장 (R2 연동 시 서버로 이전)
-  const upload = async (f: File | undefined) => {
+  const upload = async (f: File | undefined, catLabel = effUpCat) => {
     if (!f) return;
     const imgId = await putBlob(f); // IndexedDB 실저장 — 새로고침에도 유지
     const it: RoadItem = {
@@ -214,6 +229,7 @@ function RoadviewPageInner() {
       date: new Date().toISOString(), imgId, ph: '', ratio: 'auto',
       fold: null, comments: [],
       no: nextNo,   // 번호 자동 부여 (v1.9)
+      ...(catLabel ? { category: catLabel } : {}),   // 말머리 (v2.1) — 업로드 모달에서 고른 것 (끌어다 놓기는 보고 있는 탭)
     };
     setItems([it, ...items]);
     toast(`${padNo(it.no)} 업로드되었습니다`);
@@ -275,8 +291,10 @@ function RoadviewPageInner() {
   const editLevel = (c: Comment): 'free' | null => (user && c.authorId === user.id ? 'free' : null);
   const delLevel = (c: Comment): 'free' | null => (isAdmin || (user && c.authorId === user.id) ? 'free' : null);
 
-  const visible = items.filter(it => !q || it.author.includes(q)
-    || padNo(it.no).includes(q) || String(it.no ?? '').includes(q));
+  const visible = items
+    .filter(it => !cat || it.category === cat)   // 말머리 탭 (v2.1) — ALL이면 전부
+    .filter(it => !q || it.author.includes(q)
+      || padNo(it.no).includes(q) || String(it.no ?? '').includes(q));
 
   return (
     <section className="page">
@@ -284,21 +302,48 @@ function RoadviewPageInner() {
         <PageTitle>{sec.id === 'main' ? 'LOAD-B' : sec.name}</PageTitle>
         <EditableDesc k="roadview-desc" def="그림이 좋아서 모았습니다" />
         <div className="head-actions">
-          {/* 업로드 권한 (커플홈) — 추가 로드비는 환경설정 「권한」에서 따로(기본은 로드비 공통값 roadUpload) · 멤버 선택으로 좁힐 수 있다 */}
+          {/* 말머리 탭 ALL / 말머리… (v2.1 사용자 요청) — 말머리를 하나도 안 정해 둔 로드비에는 없다 */}
+          {cats.length > 0 && (
+            <div className="seg">
+              <button className={cat === '' ? 'on' : ''} onClick={() => setCat('')}>ALL</button>
+              {cats.map(c => (
+                <button key={c.id} className={cat === c.label ? 'on' : ''} onClick={() => setCat(c.label)}>{c.label}</button>
+              ))}
+            </div>
+          )}
+          {/* 업로드 권한 (v2.1) — 추가 로드비는 환경설정 「권한」에서 따로(기본은 로드비 공통값 roadUpload) · 멤버 선택으로 좁힐 수 있다 */}
           {canWriteAt(menuSet, writeKeyOf('/loadb', sec.id), { loggedIn: !!user, isAdmin, id: user?.id }, menuSet.roadUpload) && (
             <>
               <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }}
-                onChange={e => { upload(e.target.files?.[0]); e.target.value = ''; }} />
-              <button className="btn btn-dark" onClick={() => fileRef.current?.click()}
-                {...fileDrop(fl => upload(fl[0]))}>↑ UPLOAD</button>
+                onChange={e => { upload(e.target.files?.[0]); e.target.value = ''; setUpOpen(false); }} />
+              {/* 말머리가 있으면 UPLOAD → 모달에서 말머리를 고르고 파일 선택 (v2.1 사용자 요청 — 머리줄의 드롭다운은 탭과 겹쳐 보여 뺐다).
+                  끌어다 놓기는 보고 있는 탭의 말머리로 바로 올린다 */}
+              <button className="btn btn-dark"
+                onClick={() => { if (cats.length) { setUpCat(cats.some(c => c.label === cat) ? cat : ''); setUpOpen(true); } else fileRef.current?.click(); }}
+                {...fileDrop(fl => upload(fl[0], cats.some(c => c.label === cat) ? cat : ''))}>↑ UPLOAD</button>
             </>
           )}
           <SearchBar onSearch={setQ} />
         </div>
       </div>
 
-      {visible.slice(0, shown).map(it => (
-        <RoadBlock key={it.id} item={it} comments={commentsFor(cmtRows, 'road', it.id, it.comments)} onComment={addComment}
+      {/* 업로드 모달 (v2.1) — 말머리를 고르고 파일 선택 */}
+      <Modal open={upOpen} onClose={() => setUpOpen(false)} small title="업로드"
+        desc="붙일 말머리를 고르고 파일을 선택하세요"
+        actions={<>
+          <button className="btn btn-ghost" onClick={() => setUpOpen(false)}>CANCEL</button>
+          <button className="btn btn-dark" onClick={() => fileRef.current?.click()}>파일 선택 ↑</button>
+        </>}>
+        <div className="seg" style={{ flexWrap: 'wrap' }}>
+          <button className={upCat === '' ? 'on' : ''} onClick={() => setUpCat('')}>없음</button>
+          {cats.map(c => (
+            <button key={c.id} className={upCat === c.label ? 'on' : ''} onClick={() => setUpCat(c.label)}>{c.label}</button>
+          ))}
+        </div>
+      </Modal>
+
+      {visible.slice((Math.min(page, Math.max(1, Math.ceil(visible.length / PER))) - 1) * PER, Math.min(page, Math.max(1, Math.ceil(visible.length / PER))) * PER).map(it => (
+        <RoadBlock key={it.id} item={it} catBadge={badgeOf(it.category)} comments={commentsFor(cmtRows, 'road', it.id, it.comments)} onComment={addComment}
           onEditComment={editComment} onDeleteComment={deleteComment}
           canComment={allow(menuSet.roadComment) && (!!user || menuSet.roadComment === 'guest')}
           guestMode={!user && menuSet.roadComment === 'guest'}
@@ -307,7 +352,7 @@ function RoadviewPageInner() {
              손님이 올린 것은 이제 관리자만 손댈 수 있다(손님 확인 수단이 없다) */
           canEditItem={!!it.authorId && it.authorId === user?.id}
           canDeleteItem={isAdmin || (!!it.authorId && it.authorId === user?.id)}
-          onEdit={() => { setEditFor(it); setENo(String(it.no ?? '')); setEAdult(it.fold?.type === 'adult'); }}
+          onEdit={() => { setEditFor(it); setENo(String(it.no ?? '')); setEAdult(it.fold?.type === 'adult'); setECat(it.category ?? ''); }}
           onDelete={() => setDelFor(it)} />
       ))}
       {visible.length === 0 && (
@@ -315,11 +360,8 @@ function RoadviewPageInner() {
           그림이 없습니다
         </div>
       )}
-      {shown < visible.length && (
-        <div style={{ textAlign: 'center', marginTop: 6 }}>
-          <button className="btn btn-ghost" style={{ background: 'rgba(255,255,255,.9)' }}
-            onClick={() => setShown(s => s + PAGE_SIZE)}>MORE ↓</button>
-        </div>
+      {visible.length > PER && (
+        <Pager page={Math.min(page, Math.ceil(visible.length / PER))} total={Math.ceil(visible.length / PER)} onChange={setPage} />
       )}
       {/* 편집 모달 (제목 · 수위 접기) */}
       <Modal open={editFor !== null} onClose={() => setEditFor(null)} small title="그림 편집"
@@ -328,7 +370,10 @@ function RoadviewPageInner() {
           <button className="btn btn-dark" onClick={() => {
             const nv = parseInt(eNo, 10);
             setItems(items.map(x => x.id === editFor!.id
-              ? { ...x, no: Number.isFinite(nv) && nv > 0 ? nv : x.no, fold: eAdult ? { type: 'adult' } : null } : x));
+              ? {
+                ...x, no: Number.isFinite(nv) && nv > 0 ? nv : x.no, fold: eAdult ? { type: 'adult' } : null,
+                category: eCat || undefined,   // 말머리 (v2.1) — 비우면 없음
+              } : x));
             setEditFor(null);
           }}>SAVE</button>
         </>}>
@@ -338,6 +383,14 @@ function RoadviewPageInner() {
             <KInput value={eNo} onChange={e => setENo(e.target.value.replace(/[^\d]/g, ''))}
               style={{ width: 90, textAlign: 'center' }} />
           </div>
+          {/* 말머리 (v2.1) — 로드비에 말머리를 정해 뒀을 때만 */}
+          {cats.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span className="cp-lb">말머리</span>
+              <KSelect minWidth={130} value={cats.some(c => c.label === eCat) ? eCat : ''} onChange={setECat}
+                options={[{ value: '', label: '없음' }, ...cats.map(c => ({ value: c.label, label: c.label }))]} />
+            </div>
+          )}
           <KCheck label="수위 주의 접기 (블러 + 클릭 표시)" checked={eAdult} onChange={setEAdult} />
         </div>
       </Modal>

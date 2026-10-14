@@ -25,6 +25,7 @@ const LABEL: Record<string, string> = {
   thread_posts: '감상타래 글',
   applicants: '커미션 신청',
   sched_events: '스케줄러 일정',
+  trpg_reviews: 'TRPG 리뷰',
 };
 
 export function ListSync() {

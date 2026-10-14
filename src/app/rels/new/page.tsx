@@ -58,7 +58,7 @@ export default function RelNewPage() {
             headerBgG1: v.headerBgG1, headerBgG2: v.headerBgG2, headerBgAngle: v.headerBgAngle,
             pageBgG1: v.pageBgG1, pageBgG2: v.pageBgG2, pageBgAngle: v.pageBgAngle,
             members, thumbClass: '',
-            illustMode: v.kind === 'pair' ? 'duo' : 'one',
+            illustMode: v.kind === 'pair' ? (v.illustMode ?? 'duo') : 'one',   // 처음 보이는 이미지 (v2.1)
             aus: [{ id: 'base', label: '원본', catchphrase: v.catchphrase }],
             timeline: [], questions: [],
           };

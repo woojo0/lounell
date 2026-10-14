@@ -466,11 +466,18 @@ try{Object.defineProperty(window,'localStorage',{value:__m});Object.defineProper
 // 높이 리포터 — 타이머 대신 MutationObserver+load 이벤트 (백그라운드 탭 스로틀링 회피).
 // documentElement.scrollHeight는 뷰포트(=iframe 현재 높이)보다 작아지지 않아, 한 번 커지면
 // 내용이 짧아도 줄어들지 못한다(짧은 로그 아래에 빈 공간이 남던 원인) → body 기준으로 잰다.
-(function(){var p=0,n=0;function r(force){try{
-var b=document.body;if(!b)return;
+(function(){var p=0,n=0,x=0,hid=0;function r(force){try{
+var b=document.body,d=document.documentElement;if(!b||!d)return;
 // html(documentElement)은 내용이 짧아도 뷰포트(=iframe 현재 높이)만큼 늘어나므로 기준으로 쓰지 않는다.
 // scrollHeight든 offsetHeight든 마찬가지라, 늘어나지 않는 body만 본다.
-var h=Math.max(b.scrollHeight||0,b.offsetHeight||0,Math.ceil(b.getBoundingClientRect().height)||0);
+var bh=Math.max(b.scrollHeight||0,b.offsetHeight||0,Math.ceil(b.getBoundingClientRect().height)||0);
+// 뷰포트(=지금 iframe 높이)를 넘치는 만큼은 body가 못 잰다 — 마지막 글의 아래 여백이 body 밖으로 겹치거나(margin collapse) 본문이 absolute 상자에
+// 들어 있으면 body는 그만큼 짧게 나오고, 프레임이 몇 px~전부 모자란 그 차이만큼 안쪽에 스크롤이 남는다 (v2.1 사용자 제보: 이중 스크롤이 그대로).
+// 넘침(documentElement.scrollHeight > 뷰포트)이 **보일 때만** 그 차이를 기억해 더한다 — 넘침이 없을 때는 뷰포트 값을 쓰지 않으므로 자기 높이를 되읽는 일은 없다
+var v=d.clientHeight||window.innerHeight||0,o=d.scrollHeight||0,ov=!!v&&o>v+1;
+if(ov)x=Math.max(x,o-bh);
+if(!bh&&!ov)return;
+var h=bh+x;
 // **0이면 아무것도 알리지 않는다** (v2.0 사용자 발견 — 긴 로그 아래 빈 공간).
 // 예전에는 여기서 documentElement.scrollHeight로 넘어갔는데, 그 값은 최소한 뷰포트(=지금 iframe
 // 높이)만큼이라 **자기 높이를 그대로 되읽는다.** 아직 레이아웃이 안 된 순간(탭이 뒤에 있거나
@@ -479,23 +486,33 @@ var h=Math.max(b.scrollHeight||0,b.offsetHeight||0,Math.ceil(b.getBoundingClient
 if(!h)return;
 // 값이 그대로여도 가끔은 다시 알린다 (v2.0) — 바깥이 다른 이유로 높이를 되돌려 놓았을 수 있다.
 // 예전에는 「같으면 안 보냄」이라, 한 번 어긋나면 되돌릴 방법이 아예 없었다
-if(h!==p||force){p=h;parent.postMessage({__logH:h},'*');}}catch(e3){}}
-// 안쪽 스크롤 상자 풀기 (cm_260929 283eca9 — 「로그 본문에 스크롤이 이중으로」): 로그 파일이 본문을 고정 높이·overflow:auto 상자에
+if(h!==p||force){p=h;parent.postMessage({__logH:h},'*');
+// 높이를 한 번 알렸으면 문서 자체의 세로 스크롤은 끈다 — 바깥 프레임이 그 높이로 맞춰 주므로 안쪽 스크롤바가 남을 이유가 없다 (v2.1).
+// 가로는 그대로(넓은 표·그림은 가로 스크롤로 본다). 보고가 아예 안 되는 문서는 손대지 않아 기본 높이 안에서 스크롤로 읽을 수 있다
+if(!hid){hid=1;try{d.style.setProperty('overflow-y','hidden','important');d.style.setProperty('overflow-x','auto','important');}catch(e8){}}}}catch(e3){}}
+// 안쪽 스크롤 상자 풀기 (v2.1 사용자 제보 — 「로그 본문에 스크롤이 이중으로」): 로그 파일이 본문을 고정 높이·overflow:auto 상자에
 // 담아 두면 바깥 프레임을 내용 높이로 맞춰도 상자 안에서 또 스크롤이 생긴다. 넘치는 스크롤 상자는 높이 제한을 풀어 내용만큼 늘린다
-function u(){try{var els=document.body?document.body.getElementsByTagName('*'):[];for(var i=0;i<els.length;i++){var el=els[i];var tg=el.tagName;if(tg==='TEXTAREA'||tg==='SELECT'||tg==='IFRAME')continue;var cs=getComputedStyle(el);var oy=cs.overflowY;if((oy==='auto'||oy==='scroll')&&el.scrollHeight>el.clientHeight+2&&el.clientHeight>=60){el.style.setProperty('height','auto','important');el.style.setProperty('max-height','none','important');el.style.setProperty('overflow','visible','important');}}}catch(e6){}}
+function u(){try{var els=document.body?document.body.getElementsByTagName('*'):[];for(var i=0;i<els.length;i++){var el=els[i];var tg=el.tagName;if(tg==='TEXTAREA'||tg==='SELECT'||tg==='IFRAME')continue;
+// 넘치는 상자만 본다 (값싼 검사 먼저 — 큰 로그에서 getComputedStyle을 모든 요소에 부르지 않도록)
+if(!(el.scrollHeight>el.clientHeight+2&&el.clientHeight>=60))continue;
+var cs=getComputedStyle(el);var oy=cs.overflowY;if(oy!=='auto'&&oy!=='scroll'&&oy!=='overlay')continue;
+var s=el.style;s.setProperty('height','auto','important');s.setProperty('max-height','none','important');s.setProperty('overflow','visible','important');
+// 화면에 붙박인 상자(absolute/fixed — 채팅 앱 모양의 로그 틀)는 아래 끝을 풀어 내용만큼 늘어나게, fixed는 absolute로 바꿔 문서와 함께 스크롤되게 (v2.1)
+var ps=cs.position;if(ps==='fixed')s.setProperty('position','absolute','important');if(ps==='fixed'||ps==='absolute')s.setProperty('bottom','auto','important');
+}}catch(e6){}}
 document.addEventListener('DOMContentLoaded',function(){u();r(1)});addEventListener('load',function(){u();r(1)});setTimeout(function(){u();r(1)},1500);setTimeout(function(){u();r(1)},4000);addEventListener('resize',function(){r(1)});
 // **이미지·폰트는 첫 그림 뒤에 붙으면서 높이를 바꾼다** (v2.0 사용자 발견 — 긴 로그 아래 빈 공간).
 // 개별 이미지의 load/error까지 잡으려면 캡처 단계로 들어야 한다(이 이벤트들은 위로 올라오지 않는다).
 addEventListener('load',function(){r(1)},true);
 addEventListener('error',function(){r(1)},true);
 try{if(document.fonts&&document.fonts.ready)document.fonts.ready.then(function(){r(1)});}catch(e5){}
-try{new MutationObserver(function(){r(0)}).observe(document.documentElement,{childList:true,subtree:true,attributes:true});}catch(e4){}
+var ut=0;try{new MutationObserver(function(){r(0);if(!ut)ut=setTimeout(function(){ut=0;u();r(0)},300);}).observe(document.documentElement,{childList:true,subtree:true,attributes:true});}catch(e4){}
 // 0.4초마다 확인하고, 2초마다는 값이 같아도 다시 알린다 (숨김 상태에선 레이아웃이 0이라 스킵됨)
 setInterval(function(){n++;r(n%5===0);},400);
 r(1);})();
 </scr${''}ipt><style>
 /* height:auto — 로그 문서가 html/body에 100%를 걸어 두면 내용과 무관하게 뷰포트만큼 커진다 */
-html,body{margin:0!important;padding:0!important;height:auto!important;min-height:0!important}
+html,body{margin:0!important;padding:0!important;height:auto!important;min-height:0!important;max-height:none!important} /* max-height도 — body를 뷰포트 높이 상자로 만들어 그 안에서 스크롤하는 로그 (v2.1) */
 </style><scr${''}ipt>
 // 편집모드 (커플홈) — 바깥(상세 페이지)이 {__logEditMode:true}를 보내면 발화([data-i]) 위 호버 도구(✎ ＋ ✕)와 우클릭 메뉴를 켠다.
 // 고른 동작은 {__logEdit:{action,i}}로 바깥에 알리고, 바깥이 그 발화만 고쳐 문서를 다시 그린다 (널 오리진이라 바깥은 이 문서를 못 만진다)

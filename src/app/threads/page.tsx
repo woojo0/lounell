@@ -19,6 +19,7 @@ import { Character, CHAR_SEED, inCharChoices, Relation, REL_SEED, charInAu, char
 import { useMembers, type MemberLite } from '@/lib/members';
 import { useFonts } from '@/lib/fontStore';
 import { putBlob, BlobImg, useBlobUrl } from '@/lib/blobStore';
+import { pastedImageFiles } from '@/lib/pasteImages';
 import { CroppedBlobImg , type CropValue } from '@/components/ui/CropEditor';
 import { SearchBar, KTextarea, KInput, KSelect } from '@/components/ui/Kit';
 import { GuestIdBar } from '@/components/ui/GuestId';
@@ -202,7 +203,7 @@ function ThreadsPageInner() {
   const [files, setFiles] = useState<File[]>([]);
   const [urls, setUrls] = useState<string[]>([]);
   const imgRef = useRef<HTMLInputElement>(null);
-  const addFiles = (list: FileList | null) => {
+  const addFiles = (list: FileList | File[] | null) => {   // 파일 고르기 · Ctrl+V 붙여넣기 공용
     if (!list) return;
     const next = [...files, ...Array.from(list)].slice(0, 4); // 이미지 4장 제한 (4.17)
     if (files.length + list.length > 4) toast('이미지는 최대 4장까지 첨부할 수 있습니다');
@@ -264,7 +265,7 @@ function ThreadsPageInner() {
     setEpKeep(p.images); setEpPh(p.images.length ? [] : (p.phList ?? []));
     setEpFiles([]); setEpUrls([]);
   };
-  const epAddFiles = (list: FileList | null) => {
+  const epAddFiles = (list: FileList | File[] | null) => {   // 파일 고르기 · Ctrl+V 붙여넣기 공용
     if (!list) return;
     const room = 4 - epKeep.length - epPh.length;
     const next = [...epFiles, ...Array.from(list)].slice(0, Math.max(0, room));
@@ -507,7 +508,9 @@ function ThreadsPageInner() {
                 {/* 이어쓰기 컴포저 (트위터식) — 같이 쓰는 두 사람 (커플홈) */}
                 {canWrite && (
                   <div className="thr-write">
-                    <textarea placeholder="타래 이어쓰기…" value={text} onChange={e => setText(e.target.value)} />
+                    {/* Ctrl+V로 붙여 넣은 그림도 첨부 (커플홈 사용자 요청) — 글자를 붙여 넣을 때는 그대로 글자 */}
+                    <textarea placeholder="타래 이어쓰기… (사진은 Ctrl+V로 붙여 넣어도 됩니다)" value={text} onChange={e => setText(e.target.value)}
+                      onPaste={e => { const fs = pastedImageFiles(e); if (!fs.length) return; e.preventDefault(); addFiles(fs); }} />
                     {urls.length > 0 && (
                       <div className="thr-att">
                         {urls.map((u, i) => (
@@ -523,7 +526,7 @@ function ThreadsPageInner() {
                       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                         <input ref={imgRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
                           onChange={e => { addFiles(e.target.files); e.target.value = ''; }} />
-                        <button className="icobtn" data-tip="사진 추가 (최대 4장)" onClick={() => imgRef.current?.click()}>
+                        <button className="icobtn" data-tip="사진 추가 (최대 4장) · 복사한 그림은 Ctrl+V로도" onClick={() => imgRef.current?.click()}>
                           <PhotoIcon />
                         </button>
                         {/* 접기 (v2.0 스포일러 쿠션) — 게시판 글쓰기의 접기와 같은 선택지 */}
@@ -620,7 +623,8 @@ function ThreadsPageInner() {
               <KSelect minWidth={140} maxWidth={200} value={epPick ? optKey(epPick) : 'me'} onChange={setEpAs} options={asOptions} />
             </div>
           )}
-          <KTextarea style={{ minHeight: 120 }} value={epText} onChange={e => setEpText(e.target.value)} />
+          <KTextarea style={{ minHeight: 120 }} value={epText} onChange={e => setEpText(e.target.value)}
+            onPaste={e => { const fs = pastedImageFiles(e); if (!fs.length) return; e.preventDefault(); epAddFiles(fs); }} />
           {/* 접기 (v2.0 스포일러 쿠션) — 컴포저와 같은 선택지 */}
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <KSelect minWidth={140} value={epFoldType} onChange={v => setEpFoldType(v as FoldPick)} options={FOLD_OPTIONS} />
@@ -654,7 +658,7 @@ function ThreadsPageInner() {
           <div>
             <input ref={epImgRef} type="file" accept="image/*" multiple style={{ display: 'none' }}
               onChange={e => { epAddFiles(e.target.files); e.target.value = ''; }} />
-            <button className="icobtn" data-tip="사진 추가 (최대 4장)" onClick={() => epImgRef.current?.click()}>
+            <button className="icobtn" data-tip="사진 추가 (최대 4장) · 복사한 그림은 Ctrl+V로도" onClick={() => epImgRef.current?.click()}>
               <PhotoIcon />
             </button>
           </div>

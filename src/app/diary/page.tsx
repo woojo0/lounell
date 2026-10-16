@@ -270,7 +270,7 @@ function DiaryPageInner() {
           탭에는 숫자를 붙이지 않는다 — 이름과 붙어 읽혀 구분이 안 됐다 (커플홈 사용자 요청) */}
       <div className="toolrow" style={{ marginBottom: 16 }}>
         {dset.cats.length > 0 ? (
-          <div className="seg" style={{ flexWrap: 'wrap' }}>
+          <div className="seg cat-tabs">
             {dset.cats.map(c => (
               <button key={c.id} className={effCat === c.id ? 'on' : ''} onClick={() => setFCat(c.id)}>
                 {c.name}

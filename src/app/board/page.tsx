@@ -86,7 +86,8 @@ function BoardInner() {
         <EditableDesc k={board.id === MAIN_BOARD_ID ? 'board-desc' : `board-desc-${board.id}`} def={board.desc} />
       </div>
       <div className="toolrow">
-        <div className="seg">
+        {/* 말머리 탭 — 많으면 탭째 다음 줄로 (cat-tabs, 커플홈 사용자 요청) */}
+        <div className="seg cat-tabs">
           {['전체', '공지', ...board.cats.map(x => x.label)].map(c => (
             <button key={c} className={cat === c ? 'on' : ''} onClick={() => { setCat(c); setPage(1); }}>{c}</button>
           ))}

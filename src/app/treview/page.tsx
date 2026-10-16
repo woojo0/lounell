@@ -70,7 +70,8 @@ function ReviewPageInner() {
         <EditableDesc k="treview-desc" def="시나리오마다 별점과 한줄 평 — 페어별 말머리로 모아 봅니다" />
       </div>
       <div className="toolrow">
-        <div className="seg">
+        {/* 말머리 탭 — 많으면 탭째 다음 줄로 (cat-tabs, 커플홈 사용자 요청) */}
+        <div className="seg cat-tabs">
           <button className={cat === '' ? 'on' : ''} onClick={() => setCat('')}>ALL</button>
           {cats.map(c => (
             <button key={c.id} className={cat === c.label ? 'on' : ''} onClick={() => setCat(c.label)}>{c.label}</button>

@@ -48,8 +48,8 @@ function VideosPageInner() {
         <EditableDesc k="videos-desc" def="영상 하나씩 — 파일로 올리거나 링크로" />
       </div>
       <div className="toolrow">
-        {/* 왼쪽: 말머리 탭 — ALL / 환경설정에서 정한 비디오 말머리 (커플홈 사용자 요청 — 갤러리와 같은 형태) */}
-        <div className="seg">
+        {/* 왼쪽: 말머리 탭 — ALL / 환경설정에서 정한 비디오 말머리 (커플홈 사용자 요청 — 갤러리와 같은 형태) · 많으면 탭째 다음 줄로 (cat-tabs) */}
+        <div className="seg cat-tabs">
           <button className={cat === '' ? 'on' : ''} onClick={() => setCat('')}>ALL</button>
           {videoCats.map(c => (
             <button key={c.label} className={cat === c.label ? 'on' : ''} onClick={() => setCat(c.label)}>{c.label}</button>

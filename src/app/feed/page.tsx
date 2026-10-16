@@ -64,8 +64,8 @@ function FeedPageInner() {
         <EditableDesc k="feed-desc" def="게시물이 하나씩 크게 — 합작·일러스트를 큰 화면으로" />
       </div>
       <div className="toolrow">
-        {/* 왼쪽: 말머리 탭 ALL / 말머리… — 말머리를 하나도 안 정해 둔 게시판은 ALL만 */}
-        <div className="seg">
+        {/* 왼쪽: 말머리 탭 ALL / 말머리… — 말머리를 하나도 안 정해 둔 게시판은 ALL만 · 많으면 탭째 다음 줄로 (cat-tabs) */}
+        <div className="seg cat-tabs">
           <button className={cat === '' ? 'on' : ''} onClick={() => setCat('')}>ALL</button>
           {cats.map(c => (
             <button key={c.id} className={cat === c.label ? 'on' : ''} onClick={() => setCat(c.label)}>{c.label}</button>

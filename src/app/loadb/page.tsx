@@ -302,15 +302,6 @@ function RoadviewPageInner() {
         <PageTitle>{sec.id === 'main' ? 'LOAD-B' : sec.name}</PageTitle>
         <EditableDesc k="roadview-desc" def="그림이 좋아서 모았습니다" />
         <div className="head-actions">
-          {/* 말머리 탭 ALL / 말머리… (v2.1 사용자 요청) — 말머리를 하나도 안 정해 둔 로드비에는 없다 */}
-          {cats.length > 0 && (
-            <div className="seg">
-              <button className={cat === '' ? 'on' : ''} onClick={() => setCat('')}>ALL</button>
-              {cats.map(c => (
-                <button key={c.id} className={cat === c.label ? 'on' : ''} onClick={() => setCat(c.label)}>{c.label}</button>
-              ))}
-            </div>
-          )}
           {/* 업로드 권한 (v2.1) — 추가 로드비는 환경설정 「권한」에서 따로(기본은 로드비 공통값 roadUpload) · 멤버 선택으로 좁힐 수 있다 */}
           {canWriteAt(menuSet, writeKeyOf('/loadb', sec.id), { loggedIn: !!user, isAdmin, id: user?.id }, menuSet.roadUpload) && (
             <>
@@ -327,6 +318,20 @@ function RoadviewPageInner() {
         </div>
       </div>
 
+      {/* 말머리 탭 ALL / 말머리… (v2.1 사용자 요청) — 말머리를 하나도 안 정해 둔 로드비에는 없다.
+          머리줄 아래 한 줄로 (커플홈 사용자 요청 — 머리줄 오른쪽 떠 있는 자리에 두면 탭이 많을 때 제목 위로 겹쳤다).
+          많으면 탭째 다음 줄로 (cat-tabs) */}
+      {cats.length > 0 && (
+        <div className="loadb-cats">
+          <div className="seg cat-tabs">
+            <button className={cat === '' ? 'on' : ''} onClick={() => setCat('')}>ALL</button>
+            {cats.map(c => (
+              <button key={c.id} className={cat === c.label ? 'on' : ''} onClick={() => setCat(c.label)}>{c.label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 업로드 모달 (v2.1) — 말머리를 고르고 파일 선택 */}
       <Modal open={upOpen} onClose={() => setUpOpen(false)} small title="업로드"
         desc="붙일 말머리를 고르고 파일을 선택하세요"
@@ -334,7 +339,7 @@ function RoadviewPageInner() {
           <button className="btn btn-ghost" onClick={() => setUpOpen(false)}>CANCEL</button>
           <button className="btn btn-dark" onClick={() => fileRef.current?.click()}>파일 선택 ↑</button>
         </>}>
-        <div className="seg" style={{ flexWrap: 'wrap' }}>
+        <div className="seg cat-tabs">
           <button className={upCat === '' ? 'on' : ''} onClick={() => setUpCat('')}>없음</button>
           {cats.map(c => (
             <button key={c.id} className={upCat === c.label ? 'on' : ''} onClick={() => setUpCat(c.label)}>{c.label}</button>
